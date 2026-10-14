@@ -1,0 +1,27 @@
+{
+  "id": 27205, "title": "Inception", "overview": "Dom Cobb est un voleur.", "poster_path": "/inc.jpg",
+  "backdrop_path": "/incb.jpg", "release_date": "2010-07-15", "vote_average": 8.4, "runtime": 148,
+  "tagline": "Votre esprit est la scène du crime.", "genres": [{"id": 28, "name": "Action"}, {"id": 878, "name": "Science-Fiction"}],
+  "videos": {"results": [
+    {"key": "teaserFR", "site": "YouTube", "type": "Teaser", "iso_639_1": "fr"},
+    {"key": "trailerEN", "site": "YouTube", "type": "Trailer", "iso_639_1": "en"},
+    {"key": "vimeoFR", "site": "Vimeo", "type": "Trailer", "iso_639_1": "fr"}
+  ]},
+  "credits": {"cast": [
+    {"name": "Leonardo DiCaprio", "character": "Cobb", "profile_path": "/leo.jpg", "order": 0},
+    {"name": "Sans photo", "character": null, "profile_path": null, "order": 1}
+  ]},
+  "recommendations": {"results": [
+    {"id": 157336, "title": "Interstellar", "poster_path": "/int.jpg", "release_date": "2014-11-05", "vote_average": 8.4, "genre_ids": [878]},
+    {"id": 1, "title": "Sans affiche", "poster_path": null, "genre_ids": []}
+  ]},
+  "images": {"logos": [
+    {"file_path": "/logo_en.png", "iso_639_1": "en"},
+    {"file_path": "/logo_none.png", "iso_639_1": null}
+  ]},
+  "external_ids": {"imdb_id": "tt1375666"},
+  "release_dates": {"results": [
+    {"iso_3166_1": "US", "release_dates": [{"certification": "PG-13"}]},
+    {"iso_3166_1": "FR", "release_dates": [{"certification": ""}, {"certification": "12"}]}
+  ]}
+}

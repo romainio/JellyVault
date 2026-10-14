@@ -1,0 +1,632 @@
+package tv.jellyvault.app.ui.components
+
+import androidx.annotation.StringRes
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredSizeIn
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.FocusState
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusRestorer
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.isSpecified
+import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.tv.material3.Icon
+import androidx.tv.material3.LocalContentColor
+import androidx.tv.material3.MaterialTheme
+import androidx.tv.material3.Text
+import org.jellyfin.sdk.model.api.ItemSortBy
+import org.jellyfin.sdk.model.api.SortOrder
+import org.jellyfin.sdk.model.serializer.toUUIDOrNull
+import tv.jellyvault.app.R
+import tv.jellyvault.app.data.model.Trailer
+import tv.jellyvault.app.ui.FontAwesome
+import tv.jellyvault.app.ui.PreviewTvSpec
+import tv.jellyvault.app.ui.data.ChooseVersionParams
+import tv.jellyvault.app.ui.data.SortAndDirection
+import tv.jellyvault.app.ui.ifElse
+import tv.jellyvault.app.ui.theme.JellyVaultTheme
+import tv.jellyvault.app.ui.theme.PreviewInteractionSource
+import tv.jellyvault.app.ui.theme.jv.JvColors
+import tv.jellyvault.app.ui.tryRequestFocus
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
+
+/**
+ * Standard row of [ExpandablePlayButton] including Play (or Resume & Restart), Mark played, & More
+ */
+@Composable
+fun ExpandablePlayButtons(
+    title: String,
+    resumePosition: Duration,
+    watched: Boolean,
+    favorite: Boolean,
+    canDelete: Boolean,
+    trailers: List<Trailer>?,
+    playOnClick: (position: Duration) -> Unit,
+    watchOnClick: () -> Unit,
+    favoriteOnClick: () -> Unit,
+    moreOnClick: () -> Unit,
+    trailerOnClick: (Trailer) -> Unit,
+    onConfirmDelete: () -> Unit,
+    chooseVersionParams: ChooseVersionParams?,
+    buttonOnFocusChanged: (FocusState) -> Unit,
+    modifier: Modifier = Modifier,
+    /** JellyVault: one more button before "More" (Rate) */
+    extraButton: (@Composable (Modifier) -> Unit)? = null,
+) {
+    val resources = LocalResources.current
+    val firstFocus = remember { FocusRequester() }
+    val restartInteractionSource = remember { MutableInteractionSource() }
+    val restartButtonFocused by restartInteractionSource.collectIsFocusedAsState()
+    LaunchedEffect(resumePosition) {
+        // Reset focus if the restart button was focuses and it is going to disappear
+        if (restartButtonFocused && resumePosition == Duration.ZERO) {
+            firstFocus.tryRequestFocus()
+        }
+    }
+
+    var chooseVersion by remember { mutableStateOf<DialogParams?>(null) }
+
+    LazyRow(
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        contentPadding = PaddingValues(8.dp),
+        modifier =
+            modifier
+                .focusGroup()
+                .focusRestorer(firstFocus),
+    ) {
+        item("play") {
+            ExpandablePlayButton(
+                title = if (resumePosition > Duration.ZERO) R.string.resume else R.string.play,
+                resume = resumePosition,
+                icon = Icons.Default.PlayArrow,
+                onClick = playOnClick,
+                style = ButtonStyle.Primary,
+                modifier =
+                    Modifier
+                        .onFocusChanged(buttonOnFocusChanged)
+                        .focusRequester(firstFocus),
+            )
+        }
+        if (resumePosition > Duration.ZERO) {
+            item("restart") {
+                ExpandablePlayButton(
+                    title = R.string.restart,
+                    resume = Duration.ZERO,
+                    icon = Icons.Default.Refresh,
+                    onClick = playOnClick,
+                    modifier = Modifier.onFocusChanged(buttonOnFocusChanged),
+                    mirrorIcon = true,
+                    interactionSource = restartInteractionSource,
+                )
+            }
+        }
+
+        if (chooseVersionParams != null && chooseVersionParams.mediaSources.size > 1) {
+            item {
+                ExpandableFaButton(
+                    title = R.string.version,
+                    iconStringRes = R.string.fa_file_video,
+                    onClick = {
+                        chooseVersion =
+                            chooseVersionParams(
+                                resources,
+                                chooseVersionParams.mediaSources.orEmpty(),
+                                chooseVersionParams.chosenStreams
+                                    ?.source
+                                    ?.id
+                                    ?.toUUIDOrNull(),
+                            ) { idx ->
+                                val source = chooseVersionParams.mediaSources[idx]
+                                chooseVersionParams.onChooseVersion.invoke(source)
+                            }
+                    },
+                    modifier = Modifier.onFocusChanged(buttonOnFocusChanged),
+                )
+            }
+        }
+
+        // Watched button
+        item("watched") {
+            ExpandableFaButton(
+                title = if (watched) R.string.mark_unwatched else R.string.mark_watched,
+                iconStringRes = if (watched) R.string.fa_eye else R.string.fa_eye_slash,
+                active = watched,
+                onClick = watchOnClick,
+                modifier = Modifier.onFocusChanged(buttonOnFocusChanged),
+            )
+        }
+
+        // Favorite button
+        item("favorite") {
+            ExpandableFaButton(
+                title = if (favorite) R.string.remove_favorite else R.string.add_favorite,
+                iconStringRes = R.string.fa_heart,
+                onClick = favoriteOnClick,
+                iconColor = if (favorite) JvColors.Heart else Color.Unspecified,
+                modifier = Modifier.onFocusChanged(buttonOnFocusChanged),
+            )
+        }
+
+        if (trailers != null) {
+            item("trailers") {
+                TrailerButton(
+                    trailers = trailers,
+                    trailerOnClick = trailerOnClick,
+                    modifier = Modifier.onFocusChanged(buttonOnFocusChanged),
+                )
+            }
+        }
+        if (canDelete) {
+            item("delete") {
+                DeleteButton(
+                    title = title,
+                    onConfirmDelete = onConfirmDelete,
+                    modifier =
+                        Modifier
+                            .onFocusChanged(buttonOnFocusChanged),
+                )
+            }
+        }
+
+        if (extraButton != null) {
+            item("extra") { extraButton(Modifier.onFocusChanged(buttonOnFocusChanged)) }
+        }
+
+        // More button
+        item("more") {
+            ExpandablePlayButton(
+                title = R.string.more,
+                resume = Duration.ZERO,
+                icon = Icons.Default.MoreVert,
+                onClick = { moreOnClick.invoke() },
+                modifier = Modifier.onFocusChanged(buttonOnFocusChanged),
+            )
+        }
+    }
+    chooseVersion?.let { params ->
+        DialogPopup(
+            showDialog = true,
+            title = params.title,
+            dialogItems = params.items,
+            onDismissRequest = { chooseVersion = null },
+            dismissOnClick = true,
+            waitToLoad = params.fromLongClick,
+        )
+    }
+}
+
+val MinButtonSize = 40.dp
+
+/**
+ * An icon button typically used in a row for playing media
+ *
+ * Only shows the icon until focused when it expands to show the title
+ */
+@Composable
+fun ExpandablePlayButton(
+    @StringRes title: Int,
+    resume: Duration,
+    icon: ImageVector,
+    onClick: (position: Duration) -> Unit,
+    modifier: Modifier = Modifier,
+    interactionSource: MutableInteractionSource = remember { MutableInteractionSource() },
+    mirrorIcon: Boolean = false,
+    enabled: Boolean = true,
+    style: ButtonStyle = ButtonStyle.Secondary,
+) = ExpandablePlayButton(
+    title = title,
+    resume = resume,
+    style = style,
+    icon = {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            modifier =
+                Modifier
+                    .size(28.dp)
+                    .ifElse(mirrorIcon, Modifier.graphicsLayer { scaleX = -1f }),
+        )
+    },
+    onClick = onClick,
+    modifier = modifier,
+    interactionSource = interactionSource,
+    enabled = enabled,
+)
+
+@Composable
+fun ExpandablePlayButton(
+    @StringRes title: Int,
+    resume: Duration,
+    icon: Painter,
+    onClick: (position: Duration) -> Unit,
+    modifier: Modifier = Modifier,
+    interactionSource: MutableInteractionSource = remember { MutableInteractionSource() },
+    mirrorIcon: Boolean = false,
+    enabled: Boolean = true,
+) = ExpandablePlayButton(
+    title = title,
+    resume = resume,
+    icon = {
+        Icon(
+            painter = icon,
+            contentDescription = null,
+            modifier =
+                Modifier
+                    .size(28.dp)
+                    .ifElse(mirrorIcon, Modifier.graphicsLayer { scaleX = -1f }),
+        )
+    },
+    onClick = onClick,
+    modifier = modifier,
+    interactionSource = interactionSource,
+    enabled = enabled,
+)
+
+@Composable
+fun ExpandablePlayButton(
+    @StringRes title: Int,
+    resume: Duration,
+    icon: @Composable BoxScope.() -> Unit,
+    onClick: (position: Duration) -> Unit,
+    modifier: Modifier = Modifier,
+    interactionSource: MutableInteractionSource = remember { MutableInteractionSource() },
+    enabled: Boolean = true,
+    style: ButtonStyle = ButtonStyle.Secondary,
+) = ExpandablePlayButton(
+    title = stringResource(title),
+    icon = icon,
+    onClick = { onClick.invoke(resume) },
+    modifier = modifier,
+    interactionSource = interactionSource,
+    enabled = enabled,
+    style = style,
+)
+
+/**
+ * Same with a ready-made label (eg « Téléchargement 42 % » on a TMDB page)
+ */
+@Composable
+fun ExpandablePlayButton(
+    title: String,
+    icon: @Composable BoxScope.() -> Unit,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    interactionSource: MutableInteractionSource = remember { MutableInteractionSource() },
+    enabled: Boolean = true,
+    style: ButtonStyle = ButtonStyle.Secondary,
+) {
+    val isFocused = interactionSource.collectIsFocusedAsState().value
+    // The main button always says what it does ("Lire"), like a real call to action
+    val alwaysLabeled = style == ButtonStyle.Primary
+    Button(
+        onClick = onClick,
+        enabled = enabled,
+        style = style,
+        modifier =
+            modifier.requiredSizeIn(
+                minWidth = MinButtonSize,
+                minHeight = MinButtonSize,
+                maxHeight = MinButtonSize,
+            ),
+        contentPadding = DefaultButtonPadding,
+        interactionSource = interactionSource,
+    ) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier =
+                Modifier
+                    .padding(start = 2.dp)
+                    .height(MinButtonSize),
+        ) {
+            icon.invoke(this)
+        }
+        AnimatedVisibility(isFocused || alwaysLabeled) {
+            Spacer(Modifier.size(8.dp))
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleSmall,
+                modifier = Modifier.padding(end = if (alwaysLabeled) 12.dp else 4.dp),
+            )
+        }
+    }
+}
+
+/**
+ * Similar to [ExpandablePlayButton], but uses a [FontAwesome] string instead of an Icon
+ */
+@Composable
+fun ExpandableFaButton(
+    @StringRes title: Int,
+    @StringRes iconStringRes: Int,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    interactionSource: MutableInteractionSource = remember { MutableInteractionSource() },
+    iconColor: Color = Color.Unspecified,
+    enabled: Boolean = true,
+    /** A state that is on (eg already watched): accent icon at rest, the normal focused color once focused */
+    active: Boolean = false,
+) = ExpandableFaButton(
+    title = stringResource(title),
+    iconStringRes = iconStringRes,
+    onClick = onClick,
+    modifier = modifier,
+    interactionSource = interactionSource,
+    iconColor = iconColor,
+    enabled = enabled,
+    active = active,
+)
+
+@Composable
+fun ExpandableFaButton(
+    title: String,
+    @StringRes iconStringRes: Int,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    interactionSource: MutableInteractionSource = remember { MutableInteractionSource() },
+    iconColor: Color = Color.Unspecified,
+    enabled: Boolean = true,
+    active: Boolean = false,
+) {
+    val isFocused = interactionSource.collectIsFocusedAsState().value
+    Button(
+        onClick = onClick,
+        enabled = enabled,
+        modifier =
+            modifier.requiredSizeIn(
+                minWidth = MinButtonSize,
+                minHeight = MinButtonSize,
+                maxHeight = MinButtonSize,
+            ),
+        contentPadding = DefaultButtonPadding,
+        interactionSource = interactionSource,
+    ) {
+        Box(
+            modifier =
+                Modifier
+                    .size(32.dp),
+        ) {
+            Text(
+                text = stringResource(iconStringRes),
+                style = MaterialTheme.typography.titleSmall,
+                color = if (active && !isFocused) MaterialTheme.colorScheme.primary else iconColor,
+                fontSize = 16.sp,
+                fontFamily = FontAwesome,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.align(Alignment.Center),
+            )
+        }
+        AnimatedVisibility(isFocused) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleSmall,
+                modifier = Modifier.padding(end = 4.dp),
+            )
+        }
+    }
+}
+
+/**
+ * A [FontAwesome] glyph the size of the 28 dp icons of [ExpandablePlayButton], for icons Material lacks (download, clock)
+ */
+@Composable
+fun FaButtonIcon(
+    @StringRes iconStringRes: Int,
+    modifier: Modifier = Modifier,
+) = Text(
+    text = stringResource(iconStringRes),
+    fontSize = 20.sp,
+    fontFamily = FontAwesome,
+    textAlign = TextAlign.Center,
+    modifier = modifier,
+)
+
+@Composable
+fun TrailerButton(
+    trailers: List<Trailer>,
+    trailerOnClick: (Trailer) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var showDialog by remember { mutableStateOf(false) }
+    ExpandableFaButton(
+        title =
+            if (trailers.isEmpty()) {
+                R.string.no_trailers
+            } else if (trailers.size == 1) {
+                R.string.play_trailer
+            } else {
+                R.string.trailers_title
+            },
+        iconStringRes = R.string.fa_film,
+        enabled = trailers.isNotEmpty(),
+        onClick = {
+            if (trailers.size == 1) {
+                trailerOnClick.invoke(trailers.first())
+            } else {
+                showDialog = true
+            }
+        },
+        modifier = modifier,
+    )
+    if (showDialog) {
+        TrailerDialog(
+            onDismissRequest = { showDialog = false },
+            trailers = trailers,
+            onClick = trailerOnClick,
+        )
+    }
+}
+
+@Composable
+fun DeleteButton(
+    onConfirmDelete: () -> Unit,
+    title: String,
+    modifier: Modifier = Modifier,
+    interactionSource: MutableInteractionSource = remember { MutableInteractionSource() },
+) {
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    val focused by interactionSource.collectIsFocusedAsState()
+    val iconTint by
+        animateColorAsState(
+            targetValue =
+                if (focused) {
+                    JvColors.Danger
+                } else {
+                    MaterialTheme.colorScheme.onSurface.copy(
+                        alpha = 0.8f,
+                    )
+                },
+            animationSpec =
+                tween(
+                    easing = LinearEasing,
+                ),
+        )
+    ExpandablePlayButton(
+        title = R.string.delete,
+        resume = Duration.ZERO,
+        icon = {
+            Icon(
+                imageVector = Icons.Default.Delete,
+                contentDescription = null,
+                tint = if (iconTint.isSpecified) iconTint else LocalContentColor.current,
+                modifier =
+                    Modifier
+                        .padding(start = 2.dp)
+                        .size(24.dp),
+            )
+        },
+        onClick = { showDeleteDialog = true },
+        interactionSource = interactionSource,
+        modifier = modifier,
+    )
+    if (showDeleteDialog) {
+        ConfirmDeleteDialog(
+            itemTitle = title,
+            onCancel = { showDeleteDialog = false },
+            onConfirm = {
+                onConfirmDelete.invoke()
+                showDeleteDialog = false
+            },
+        )
+    }
+}
+
+@PreviewTvSpec
+@Composable
+private fun ExpandablePlayButtonsPreview() {
+    JellyVaultTheme(true) {
+        ExpandablePlayButtons(
+            title = "Movie",
+            resumePosition = 10.seconds,
+            watched = false,
+            favorite = false,
+            playOnClick = {},
+            watchOnClick = {},
+            favoriteOnClick = {},
+            moreOnClick = {},
+            buttonOnFocusChanged = {},
+            trailers = listOf(),
+            trailerOnClick = {},
+            canDelete = true,
+            onConfirmDelete = {},
+            chooseVersionParams = null,
+            modifier = Modifier,
+        )
+    }
+}
+
+@PreviewTvSpec
+@Composable
+private fun ViewOptionsPreview() {
+    val source = remember { PreviewInteractionSource() }
+    JellyVaultTheme {
+        Column(
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            modifier = Modifier.padding(16.dp),
+        ) {
+            ExpandablePlayButton(
+                title = R.string.play,
+                resume = Duration.ZERO,
+                icon = Icons.Default.PlayArrow,
+                onClick = {},
+                interactionSource = source,
+            )
+            ExpandablePlayButton(
+                title = R.string.play,
+                resume = Duration.ZERO,
+                icon = painterResource(R.drawable.baseline_pause_24),
+                onClick = {},
+                interactionSource = source,
+            )
+            ExpandableFaButton(
+                title = R.string.play,
+                iconStringRes = R.string.fa_eye,
+                onClick = {},
+                modifier = Modifier,
+                interactionSource = source,
+            )
+
+            Row {
+                ExpandableFaButton(
+                    title = R.string.mark_unwatched,
+                    iconStringRes = R.string.fa_eye,
+                    onClick = {},
+                    modifier = Modifier,
+                )
+                DeleteButton(
+                    onConfirmDelete = {},
+                    title = "Movie",
+                )
+                SortByButton(
+                    sortOptions = listOf(),
+                    current = SortAndDirection(ItemSortBy.DEFAULT, SortOrder.ASCENDING),
+                    onSortChange = {},
+                )
+            }
+            DeleteButton(
+                onConfirmDelete = {},
+                title = "Movie",
+                interactionSource = source,
+            )
+        }
+    }
+}

@@ -1,0 +1,512 @@
+package tv.jellyvault.app.ui.setup
+
+import android.Manifest
+import android.content.res.Resources
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusRestorer
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.DialogProperties
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.tv.material3.ListItem
+import androidx.tv.material3.MaterialTheme
+import androidx.tv.material3.Text
+import timber.log.Timber
+import tv.jellyvault.app.R
+import tv.jellyvault.app.data.model.JellyfinServer
+import tv.jellyvault.app.ui.components.BasicDialog
+import tv.jellyvault.app.ui.components.CircularProgress
+import tv.jellyvault.app.ui.components.DialogItem
+import tv.jellyvault.app.ui.components.DialogPopup
+import tv.jellyvault.app.ui.components.EditTextBox
+import tv.jellyvault.app.ui.components.ErrorMessage
+import tv.jellyvault.app.ui.components.LoadingPage
+import tv.jellyvault.app.ui.components.TextButton
+import tv.jellyvault.app.ui.dimAndBlur
+import tv.jellyvault.app.ui.ifElse
+import tv.jellyvault.app.ui.isNotNullOrBlank
+import tv.jellyvault.app.ui.rememberInt
+import tv.jellyvault.app.ui.theme.jv.JvColors
+import tv.jellyvault.app.ui.tryRequestFocus
+import tv.jellyvault.app.util.LoadingState
+
+@Composable
+fun SwitchServerContent(
+    modifier: Modifier = Modifier,
+    viewModel: SwitchServerViewModel = hiltViewModel(),
+) {
+    val state by viewModel.state.collectAsState()
+    LaunchedEffect(Unit) {
+        viewModel.init()
+    }
+
+    when (val st = state.loading) {
+        is LoadingState.Error -> ErrorMessage(st, modifier)
+
+        LoadingState.Loading,
+        LoadingState.Pending,
+        -> LoadingPage(modifier)
+
+        LoadingState.Success -> SwitchServerContentInternal(state, viewModel, modifier)
+    }
+}
+
+@Composable
+private fun SwitchServerContentInternal(
+    state: SwitchServerState,
+    viewModel: SwitchServerViewModel,
+    modifier: Modifier = Modifier,
+) {
+    val resources = LocalResources.current
+    var showAddServer by remember { mutableStateOf(false) }
+    var showDeleteDialog by remember { mutableStateOf<JellyfinServer?>(null) }
+    var focusedIndex by rememberInt(0)
+    Box(
+        modifier = modifier.dimAndBlur(showAddServer || showDeleteDialog != null),
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(24.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    // Center the content like the Select User screen
+                    .align(Alignment.Center)
+                    .padding(16.dp),
+        ) {
+            // Match SwitchUser header height (title + subtitle) to align icons vertically across screens
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.select_server),
+                    style = MaterialTheme.typography.displaySmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                // Invisible subtitle placeholder to mirror the server name line on the Select User screen
+                Text(
+                    text = "Server placeholder",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = Color.Transparent,
+                )
+            }
+
+            // Horizontal scrollable list of server icons - centered
+            Box(
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.Center,
+            ) {
+                val focusRequester = remember { FocusRequester() }
+                val firstServerFocus = remember { FocusRequester() }
+                LaunchedEffect(state.loading) {
+                    val state = state
+                    if (state.loading == LoadingState.Success && state.servers.isNotEmpty()) {
+                        firstServerFocus.tryRequestFocus()
+                    } else if (state.loading == LoadingState.Pending) {
+                        firstServerFocus.tryRequestFocus()
+                    }
+                }
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(24.dp),
+                    contentPadding = PaddingValues(horizontal = 48.dp, vertical = 16.dp),
+                    modifier =
+                        Modifier
+                            .wrapContentWidth()
+                            .focusRestorer(firstServerFocus)
+                            .focusRequester(focusRequester),
+                ) {
+                    itemsIndexed(state.servers) { index, server ->
+                        ServerIconCard(
+                            server = server.server,
+                            connectionStatus = server.status,
+                            serverVersionSupported = server.versionSupported,
+                            isCurrentServer = false, // TODO: Determine current server if needed
+                            onClick = {
+                                when (server.status) {
+                                    is ServerConnectionStatus.Success -> {
+                                        viewModel.switchServer(server.server)
+                                    }
+
+                                    ServerConnectionStatus.Pending -> {
+                                        // Do nothing while pending
+                                    }
+
+                                    is ServerConnectionStatus.Error -> {
+                                        viewModel.testServer(server.server)
+                                    }
+                                }
+                            },
+                            onLongClick = {
+                                showDeleteDialog = server.server
+                            },
+                            allowDelete = true,
+                            modifier =
+                                Modifier
+                                    .onFocusChanged {
+                                        if (it.isFocused) focusedIndex = index
+                                    }.ifElse(
+                                        index == 0,
+                                        Modifier.focusRequester(firstServerFocus),
+                                    ),
+                        )
+                    }
+                    // Add Server card - always rightmost
+                    item {
+                        AddServerCard(
+                            onClick = { showAddServer = true },
+                            modifier =
+                                Modifier
+                                    .onFocusChanged {
+                                        if (it.isFocused) focusedIndex = -1
+                                    }.ifElse(
+                                        state.servers.isEmpty(),
+                                        Modifier.focusRequester(firstServerFocus),
+                                    ),
+                        )
+                    }
+                }
+            }
+            // Non-focusable spacer to mirror the space occupied by the "Switch Servers" button
+            Spacer(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .height(56.dp),
+                // approximate TV button height
+            )
+        }
+
+        val errorMessage =
+            remember(resources, focusedIndex, state.servers) {
+                val server = state.servers.getOrNull(focusedIndex)
+                serverErrorMessage(server, resources)
+            }
+        AnimatedContent(
+            targetState = errorMessage,
+            transitionSpec = {
+                slideInVertically { it / 2 } togetherWith slideOutVertically { it }
+            },
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.BottomCenter),
+        ) { message ->
+
+            Text(
+                text = message ?: "",
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(start = 32.dp, end = 32.dp, bottom = 32.dp)
+                        .align(Alignment.BottomCenter),
+            )
+        }
+
+        // Delete server dialog
+        showDeleteDialog?.let { server ->
+            DialogPopup(
+                showDialog = true,
+                title = server.name ?: server.url,
+                dialogItems =
+                    listOf(
+                        DialogItem(
+                            stringResource(R.string.switch_servers),
+                            R.string.fa_arrow_left_arrow_right,
+                        ) {
+                            viewModel.switchServer(server)
+                            showDeleteDialog = null
+                        },
+                        DialogItem(
+                            stringResource(R.string.delete),
+                            Icons.Default.Delete,
+                            JvColors.Danger,
+                        ) {
+                            viewModel.removeServer(server)
+                            showDeleteDialog = null
+                        },
+                    ),
+                onDismissRequest = { showDeleteDialog = null },
+                dismissOnClick = true,
+                waitToLoad = true,
+                properties = DialogProperties(),
+                elevation = 5.dp,
+            )
+        }
+
+        if (showAddServer) {
+            AddServerDialog(
+                onDismissRequest = { showAddServer = false },
+                viewModel = viewModel,
+            )
+        }
+    }
+}
+
+@Composable
+private fun AddServerDialog(
+    onDismissRequest: () -> Unit,
+    viewModel: SwitchServerViewModel,
+) {
+    val state by viewModel.state.collectAsState()
+    var showEnterAddress by remember { mutableStateOf(false) }
+
+    val permissionLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.RequestPermission(),
+        ) { isGranted ->
+            if (isGranted) {
+                viewModel.discoverServers()
+            } else {
+                showEnterAddress = true
+            }
+        }
+
+    LaunchedEffect(Unit) {
+        viewModel.clearAddServerState()
+        if (!showEnterAddress) {
+            if (viewModel.hasPermission) {
+                viewModel.discoverServers()
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.CINNAMON_BUN) {
+                permissionLauncher.launch(Manifest.permission.ACCESS_LOCAL_NETWORK)
+            } else {
+                Timber.w(
+                    "No ACCESS_LOCAL_NETWORK permission, but API <%s: %s",
+                    Build.VERSION_CODES.CINNAMON_BUN,
+                    Build.VERSION.SDK_INT,
+                )
+            }
+        }
+    }
+
+    val firstDiscoveredServerFocusRequester = remember { FocusRequester() }
+
+    // Default focus to first discovered server if available
+    LaunchedEffect(state.discoveredServers.isNotEmpty(), showEnterAddress) {
+        if (!showEnterAddress && state.discoveredServers.isNotEmpty()) {
+            firstDiscoveredServerFocusRequester.tryRequestFocus()
+        }
+    }
+
+    BasicDialog(
+        onDismissRequest = {
+            showEnterAddress = false
+            viewModel.clearAddServerState()
+            onDismissRequest.invoke()
+        },
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+        elevation = 10.dp,
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier =
+                Modifier
+                    .padding(16.dp)
+                    .fillMaxWidth(.4f),
+        ) {
+            if (!showEnterAddress) {
+                // Show discovered servers first
+                Text(
+                    text = stringResource(R.string.discovered_servers),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+
+                if (state.discoveredServers.isEmpty()) {
+                    Text(
+                        text = stringResource(R.string.searching),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                } else {
+                    LazyColumn(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 300.dp),
+                    ) {
+                        items(
+                            state.discoveredServers.size,
+                            key = { state.discoveredServers[it].url },
+                        ) { index ->
+                            val server = state.discoveredServers[index]
+                            val focusRequester =
+                                if (index == 0) {
+                                    firstDiscoveredServerFocusRequester
+                                } else {
+                                    remember { FocusRequester() }
+                                }
+
+                            ListItem(
+                                enabled = true,
+                                selected = false,
+                                headlineContent = {
+                                    Text(
+                                        text =
+                                            server.name?.ifBlank { null }
+                                                ?: server.url,
+                                        style = MaterialTheme.typography.bodyLarge,
+                                    )
+                                },
+                                supportingContent = {
+                                    Text(
+                                        text = server.url,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                    )
+                                },
+                                onClick = {
+                                    viewModel.addServer(server.url, showToast = true)
+                                },
+                                modifier = Modifier.focusRequester(focusRequester),
+                            )
+                        }
+                    }
+                }
+
+                TextButton(
+                    onClick = {
+                        showEnterAddress = true
+                    },
+                    modifier = Modifier.align(Alignment.CenterHorizontally),
+                ) {
+                    Text(text = stringResource(R.string.enter_server_address))
+                }
+            } else {
+                // Show enter server address form
+                val addServerState = state.addServerState
+                var url by remember { mutableStateOf("") }
+                val submit = {
+                    viewModel.addServer(url, showToast = false)
+                }
+                val textBoxFocusRequester = remember { FocusRequester() }
+
+                LaunchedEffect(Unit) {
+                    textBoxFocusRequester.tryRequestFocus()
+                }
+                LaunchedEffect(url) {
+                    viewModel.clearAddServerState()
+                }
+
+                Text(
+                    text = stringResource(R.string.enter_server_url),
+                )
+                EditTextBox(
+                    value = url,
+                    onValueChange = { url = it },
+                    keyboardOptions =
+                        KeyboardOptions(
+                            capitalization = KeyboardCapitalization.None,
+                            autoCorrectEnabled = false,
+                            keyboardType = KeyboardType.Uri,
+                            imeAction = ImeAction.Go,
+                        ),
+                    keyboardActions =
+                        KeyboardActions(
+                            onGo = { submit.invoke() },
+                        ),
+                    modifier =
+                        Modifier
+                            .testTag("server_url_text")
+                            .focusRequester(textBoxFocusRequester)
+                            .fillMaxWidth(),
+                )
+                when (val st = addServerState) {
+                    is LoadingState.Error -> {
+                        Text(
+                            text =
+                                st.message ?: st.exception?.localizedMessage
+                                    ?: "An error occurred",
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+
+                    else -> {}
+                }
+                TextButton(
+                    onClick = { submit.invoke() },
+                    enabled = url.isNotNullOrBlank() && addServerState == LoadingState.Pending,
+                    modifier = Modifier,
+                ) {
+                    if (addServerState == LoadingState.Loading) {
+                        CircularProgress(Modifier.size(32.dp))
+                    } else {
+                        Text(text = stringResource(R.string.submit))
+                    }
+                }
+            }
+        }
+    }
+}
+
+fun serverErrorMessage(
+    server: ServerState?,
+    resources: Resources,
+): String? =
+    when {
+        server?.status is ServerConnectionStatus.Error -> {
+            server.status.message
+        }
+
+        server?.status is ServerConnectionStatus.Success &&
+            server.versionSupported == ServerVersionSupported.NOT_SUPPORTED -> {
+            resources.getString(R.string.server_version_not_supported) + ": ${server.status.systemInfo.version}"
+        }
+
+        server?.versionSupported == ServerVersionSupported.NOT_SUPPORTED -> {
+            resources.getString(R.string.server_version_not_supported)
+        }
+
+        else -> {
+            null
+        }
+    }

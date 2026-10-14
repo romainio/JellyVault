@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Names should be prefixed with 'fa_' and use the icon name from FontAwesome -->
+    <!-- Uses v6 of FontAwesome: https://fontawesome.com/v6/icons/classic/solid/<name> -->
+    <!-- Value is '&#x' then the unicode value, then semicolon -->
+    <string name="fa_tag" translatable="false">&#xf02b;</string>
+    <string name="fa_user" translatable="false">&#xf007;</string>
+    <string name="fa_location_dot" translatable="false">&#xf3c5;</string>
+    <string name="fa_film" translatable="false">&#xf008;</string>
+    <string name="fa_circle_play" translatable="false">&#xf144;</string>
+    <string name="fa_image" translatable="false">&#xf03e;</string>
+    <string name="fa_images" translatable="false">&#xf302;</string>
+    <string name="fa_rotate_right" translatable="false">&#xf2f9;</string>
+    <string name="fa_rotate_left" translatable="false">&#xf2ea;</string>
+    <string name="fa_arrows_rotate" translatable="false">&#xf021;</string>
+    <string name="fa_arrow_right_arrow_left" translatable="false">&#xf0ec;</string>
+    <string name="fa_magnifying_glass_plus" translatable="false">&#xf00e;</string>
+    <string name="fa_magnifying_glass_minus" translatable="false">&#xf010;</string>
+    <string name="fa_caret_up" translatable="false">&#xf0d8;</string>
+    <string name="fa_caret_down" translatable="false">&#xf0d7;</string>
+    <string name="fa_caret_left" translatable="false">&#xf0d9;</string>
+    <string name="fa_caret_right" translatable="false">&#xf0da;</string>
+    <string name="fa_heart" translatable="false">&#xf004;</string>
+    <string name="fa_star" translatable="false">&#xf005;</string>
+    <string name="fa_video" translatable="false">&#xf03d;</string>
+    <string name="fa_play" translatable="false">&#xf04b;</string>
+    <string name="fa_pause" translatable="false">&#xf04c;</string>
+    <string name="fa_arrow_down_long" translatable="false">&#xf175;</string>
+    <string name="fa_arrow_up_long" translatable="false">&#xf176;</string>
+    <string name="fa_arrow_left_long" translatable="false">&#xf177;</string>
+    <string name="fa_arrow_right_long" translatable="false">&#xf178;</string>
+    <string name="fa_angle_up" translatable="false">&#xf106;</string>
+    <string name="fa_angles_up" translatable="false">&#xf102;</string>
+    <string name="fa_angle_down" translatable="false">&#xf107;</string>
+    <string name="fa_angles_down" translatable="false">&#xf103;</string>
+    <string name="fa_house" translatable="false">&#xf015;</string>
+    <string name="fa_closed_captioning" translatable="false">&#xf20a;</string>
+    <string name="fa_tv" translatable="false">&#xf26c;</string>
+    <string name="fa_music" translatable="false">&#xf001;</string>
+    <string name="fa_eye" translatable="false">&#xf06e;</string>
+    <string name="fa_eye_slash" translatable="false">&#xf070;</string>
+    <string name="fa_arrow_left_arrow_right" translatable="false">&#xf0ec;</string>
+    <string name="fa_shuffle" translatable="false">&#xf074;</string>
+    <string name="fa_open_folder" translatable="false">&#xf07c;</string>
+    <string name="fa_list_ul" translatable="false">&#xf0ca;</string>
+    <string name="fa_file_video" translatable="false">&#xf1c8;</string>
+    <string name="fa_volume_low" translatable="false">&#xf027;</string>
+    <string name="fa_volume_high" translatable="false">&#xf028;</string>
+    <string name="fa_ellipsis" translatable="false">&#xf141;</string>
+    <string name="fa_ellipsis_vertical" translatable="false">&#xf142;</string>
+    <string name="fa_filter" translatable="false">&#xf0b0;</string>
+    <string name="fa_sliders" translatable="false">&#xf1de;</string>
+    <string name="fa_microphone" translatable="false">&#xf130;</string>
+    <string name="fa_download" translatable="false">&#xf019;</string>
+    <string name="fa_clock" translatable="false">&#xf017;</string>
+    <string name="fa_bell" translatable="false">&#xf0f3;</string>
+    <string name="fa_check" translatable="false">&#xf00c;</string>
+    <string name="fa_cloud_arrow_up" translatable="false">&#xf0ee;</string>
+    <string name="fa_cloud_arrow_down" translatable="false">&#xf0ed;</string>
+    <string name="fa_compass" translatable="false">&#xf14e;</string>
+    <string name="fa_repeat" translatable="false">&#xf363;</string>
+    <string name="fa_compact_disc" translatable="false">&#xf51f;</string>
+    <string name="fa_xmark" translatable="false">&#xf00d;</string>
+    <string name="fa_dice" translatable="false">&#xf522;</string>
+    <string name="fa_circle_xmark" translatable="false">&#xf057;</string>
+</resources>

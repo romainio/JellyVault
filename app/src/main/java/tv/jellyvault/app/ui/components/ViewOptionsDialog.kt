@@ -1,0 +1,340 @@
+package tv.jellyvault.app.ui.components
+
+import android.view.Gravity
+import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.DialogWindowProvider
+import androidx.tv.material3.MaterialTheme
+import androidx.tv.material3.Text
+import androidx.tv.material3.surfaceColorAtElevation
+import kotlinx.serialization.Serializable
+import org.jellyfin.sdk.model.api.BaseItemKind
+import org.jellyfin.sdk.model.api.ImageType
+import tv.jellyvault.app.R
+import tv.jellyvault.app.preferences.AppChoicePreference
+import tv.jellyvault.app.preferences.AppClickablePreference
+import tv.jellyvault.app.preferences.AppPreference
+import tv.jellyvault.app.preferences.AppSliderPreference
+import tv.jellyvault.app.preferences.AppSwitchPreference
+import tv.jellyvault.app.preferences.PrefContentScale
+import tv.jellyvault.app.ui.AspectRatio
+import tv.jellyvault.app.ui.preferences.ComposablePreference
+import tv.jellyvault.app.ui.tryRequestFocus
+
+/**
+ * A dialog that shows the controls for making changes to a [ViewOptions] object. The caller must manage the state of the [ViewOptions].
+ *
+ * It displays the [AppPreference] objects from [ViewOptions.GRID_OPTIONS]
+ */
+@Composable
+fun ViewOptionsDialog(
+    viewOptions: ViewOptions,
+    onDismissRequest: () -> Unit,
+    onViewOptionsChange: (ViewOptions) -> Unit,
+    defaultViewOptions: ViewOptions = ViewOptions(),
+) {
+    val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) { focusRequester.tryRequestFocus() }
+    val columnState = rememberLazyListState()
+    Dialog(
+        onDismissRequest = onDismissRequest,
+        properties =
+            DialogProperties(
+                usePlatformDefaultWidth = false,
+            ),
+    ) {
+        val dialogWindowProvider = LocalView.current.parent as? DialogWindowProvider
+        dialogWindowProvider?.window?.let { window ->
+            window.setGravity(Gravity.END)
+            window.setDimAmount(0f)
+        }
+        val options =
+            remember(viewOptions.type) {
+                when (viewOptions.type) {
+                    ViewOptionsType.GRID -> ViewOptions.GRID_OPTIONS
+                    ViewOptionsType.LIST -> ViewOptions.LIST_OPTIONS
+                    ViewOptionsType.DENSE_LIST -> ViewOptions.LIST_OPTIONS
+                }
+            }
+        Column(
+            verticalArrangement = Arrangement.spacedBy(0.dp),
+            modifier =
+                Modifier
+                    .width(256.dp)
+                    .heightIn(max = 380.dp)
+                    .background(
+                        MaterialTheme.colorScheme.surfaceColorAtElevation(6.dp),
+                        shape = RoundedCornerShape(8.dp),
+                    ),
+        ) {
+            Text(
+                text = stringResource(R.string.view_options),
+                style = MaterialTheme.typography.titleMedium,
+                textAlign = TextAlign.Center,
+                modifier =
+                    Modifier
+                        .padding(vertical = 8.dp)
+                        .fillMaxWidth(),
+            )
+            LazyColumn(
+                state = columnState,
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(0.dp),
+                modifier = Modifier.focusRequester(focusRequester),
+            ) {
+                items(options, key = { it.title }) { pref ->
+                    pref as AppPreference<ViewOptions, Any>
+                    val interactionSource = remember { MutableInteractionSource() }
+                    val value = pref.getter.invoke(viewOptions)
+                    ComposablePreference(
+                        preference = pref,
+                        value = value,
+                        onNavigate = {},
+                        onValueChange = { newValue ->
+                            onViewOptionsChange.invoke(pref.setter(viewOptions, newValue))
+                        },
+                        interactionSource = interactionSource,
+                        modifier = Modifier,
+                        onClickPreference = { pref ->
+                            if (pref == ViewOptions.ViewOptionsReset) {
+                                onViewOptionsChange.invoke(defaultViewOptions)
+                            }
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Stores the customizable view changes from the user
+ *
+ * This is used to determine how the UI looks such as card size and shape
+ */
+@Serializable
+data class ViewOptions(
+    val columns: Int = 6,
+    val spacing: Int = 16,
+    val contentScale: PrefContentScale = PrefContentScale.FIT,
+    val aspectRatio: AspectRatio = AspectRatio.TALL,
+    val showDetails: Boolean = false,
+    val showBackdrop: Boolean = false,
+    val imageType: ViewOptionImageType = ViewOptionImageType.PRIMARY,
+    val showTitles: Boolean = true,
+    val type: ViewOptionsType = ViewOptionsType.GRID,
+) {
+    companion object {
+        val ViewOptionsColumns =
+            AppSliderPreference<ViewOptions>(
+                title = R.string.columns,
+                defaultValue = 6,
+                min = 1,
+                max = 12,
+                interval = 1,
+                getter = { it.columns.toLong() },
+                setter = { prefs, value -> prefs.copy(columns = value.toInt()) },
+            )
+        val ViewOptionsSpacing =
+            AppSliderPreference<ViewOptions>(
+                title = R.string.spacing,
+                defaultValue = 16,
+                min = 0,
+                max = 32,
+                interval = 2,
+                getter = { it.spacing.toLong() },
+                setter = { prefs, value -> prefs.copy(spacing = value.toInt()) },
+            )
+
+        val ViewOptionsContentScale =
+            AppChoicePreference<ViewOptions, PrefContentScale>(
+                title = R.string.global_content_scale,
+                defaultValue = PrefContentScale.FIT,
+                displayValues = R.array.content_scale,
+                getter = { it.contentScale },
+                setter = { viewOptions, value -> viewOptions.copy(contentScale = value) },
+                indexToValue = { PrefContentScale.forNumber(it) },
+                valueToIndex = { it.number },
+            )
+
+        val ViewOptionsAspectRatio =
+            AppChoicePreference<ViewOptions, AspectRatio>(
+                title = R.string.aspect_ratio,
+                defaultValue = AspectRatio.TALL,
+                displayValues = R.array.aspect_ratios,
+                getter = { it.aspectRatio },
+                setter = { viewOptions, value -> viewOptions.copy(aspectRatio = value) },
+                indexToValue = { AspectRatio.entries[it] },
+                valueToIndex = { it.ordinal },
+            )
+
+        val ViewOptionsDetailHeader =
+            AppSwitchPreference<ViewOptions>(
+                title = R.string.show_details,
+                defaultValue = false,
+                getter = { it.showDetails },
+                setter = { vo, value -> vo.copy(showDetails = value) },
+            )
+        val ViewOptionsBackdrop =
+            AppSwitchPreference<ViewOptions>(
+                title = R.string.show_backdrop,
+                defaultValue = false,
+                getter = { it.showBackdrop },
+                setter = { vo, value -> vo.copy(showBackdrop = value) },
+            )
+        val ViewOptionsShowTitles =
+            AppSwitchPreference<ViewOptions>(
+                title = R.string.show_titles,
+                defaultValue = true,
+                getter = { it.showTitles },
+                setter = { vo, value -> vo.copy(showTitles = value) },
+            )
+
+        val ViewOptionsImageType =
+            AppChoicePreference<ViewOptions, ViewOptionImageType>(
+                title = R.string.image_type,
+                defaultValue = ViewOptionImageType.PRIMARY,
+                displayValues = R.array.image_types,
+                getter = { it.imageType },
+                setter = { viewOptions, value ->
+                    val aspectRatio =
+                        when (value) {
+                            ViewOptionImageType.PRIMARY -> AspectRatio.TALL
+                            ViewOptionImageType.THUMB -> AspectRatio.WIDE
+                        }
+                    viewOptions.copy(imageType = value, aspectRatio = aspectRatio)
+                },
+                indexToValue = { ViewOptionImageType.entries[it] },
+                valueToIndex = { it.ordinal },
+            )
+
+        val ViewOptionsTypePref =
+            AppChoicePreference<ViewOptions, ViewOptionsType>(
+                title = R.string.layout,
+                defaultValue = ViewOptionsType.GRID,
+                displayValues = R.array.view_options_types,
+                getter = { it.type },
+                setter = { viewOptions, value ->
+                    val spacing =
+                        when (value) {
+                            ViewOptionsType.GRID -> 16
+                            ViewOptionsType.LIST -> 4
+                            ViewOptionsType.DENSE_LIST -> 2
+                        }
+                    viewOptions.copy(type = value, spacing = spacing)
+                },
+                indexToValue = { ViewOptionsType.entries[it] },
+                valueToIndex = { it.ordinal },
+            )
+
+        val ViewOptionsReset =
+            AppClickablePreference<ViewOptions>(
+                title = R.string.reset,
+            )
+
+        val GRID_OPTIONS =
+            listOf(
+                ViewOptionsTypePref,
+                ViewOptionsImageType,
+                ViewOptionsAspectRatio,
+                ViewOptionsDetailHeader,
+                ViewOptionsBackdrop,
+                ViewOptionsShowTitles,
+                ViewOptionsColumns,
+                ViewOptionsSpacing,
+                ViewOptionsContentScale,
+                ViewOptionsReset,
+            )
+
+        val LIST_OPTIONS =
+            listOf(
+                ViewOptionsTypePref,
+                ViewOptionsDetailHeader,
+                ViewOptionsBackdrop,
+                ViewOptionsSpacing,
+                ViewOptionsReset,
+            )
+    }
+}
+
+val ViewOptionsPoster =
+    ViewOptions(
+        columns = 6,
+        spacing = 16,
+        contentScale = PrefContentScale.FILL,
+    )
+val ViewOptionsWide =
+    ViewOptions(
+        columns = 4,
+        spacing = 24,
+        contentScale = PrefContentScale.CROP,
+        aspectRatio = AspectRatio.WIDE,
+    )
+val ViewOptionsSquare =
+    ViewOptions(
+        columns = 6,
+        spacing = 16,
+        contentScale = PrefContentScale.FILL,
+        aspectRatio = AspectRatio.SQUARE,
+    )
+
+enum class ViewOptionImageType(
+    val imageType: ImageType,
+) {
+    PRIMARY(ImageType.PRIMARY),
+    THUMB(ImageType.THUMB),
+//    BANNER(ImageType.BANNER),
+}
+
+enum class ViewOptionsType {
+    GRID,
+    LIST,
+    DENSE_LIST,
+}
+
+val BaseItemKind.defaultViewOptions: ViewOptions
+    get() =
+        when (this) {
+            BaseItemKind.AUDIO,
+            BaseItemKind.MUSIC_ALBUM,
+            BaseItemKind.MUSIC_ARTIST,
+            BaseItemKind.PLAYLIST,
+            -> ViewOptionsSquare
+
+            BaseItemKind.EPISODE,
+            BaseItemKind.VIDEO,
+            BaseItemKind.MUSIC_VIDEO,
+            BaseItemKind.PHOTO,
+            BaseItemKind.PHOTO_ALBUM,
+            BaseItemKind.TV_CHANNEL,
+            BaseItemKind.LIVE_TV_CHANNEL,
+            BaseItemKind.PROGRAM,
+            BaseItemKind.TV_PROGRAM,
+            BaseItemKind.LIVE_TV_PROGRAM,
+            -> ViewOptionsWide
+
+            else -> ViewOptionsPoster
+        }

@@ -1,0 +1,1430 @@
+package tv.jellyvault.app.services
+
+import android.content.Context
+import androidx.annotation.StringRes
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.update
+import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.decodeFromJsonElement
+import kotlinx.serialization.json.encodeToStream
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import org.jellyfin.sdk.api.client.ApiClient
+import org.jellyfin.sdk.api.client.extensions.liveTvApi
+import org.jellyfin.sdk.api.client.extensions.userApi
+import org.jellyfin.sdk.api.client.extensions.userLibraryApi
+import org.jellyfin.sdk.model.DateTime
+import org.jellyfin.sdk.model.UUID
+import org.jellyfin.sdk.model.api.BaseItemKind
+import org.jellyfin.sdk.model.api.CollectionType
+import org.jellyfin.sdk.model.api.GetProgramsDto
+import org.jellyfin.sdk.model.api.ImageType
+import org.jellyfin.sdk.model.api.ItemFields
+import org.jellyfin.sdk.model.api.ItemSortBy
+import org.jellyfin.sdk.model.api.SortOrder
+import org.jellyfin.sdk.model.api.UserDto
+import org.jellyfin.sdk.model.api.request.GetArtistsRequest
+import org.jellyfin.sdk.model.api.request.GetGenresRequest
+import org.jellyfin.sdk.model.api.request.GetItemsRequest
+import org.jellyfin.sdk.model.api.request.GetLatestMediaRequest
+import org.jellyfin.sdk.model.api.request.GetLiveTvChannelsRequest
+import org.jellyfin.sdk.model.api.request.GetPersonsRequest
+import org.jellyfin.sdk.model.api.request.GetRecordingsRequest
+import org.jellyfin.sdk.model.api.request.GetStudiosRequest
+import timber.log.Timber
+import tv.jellyvault.app.R
+import tv.jellyvault.app.catalog.CatalogRepository
+import tv.jellyvault.app.catalog.HomeOrderMigration
+import tv.jellyvault.app.catalog.PersonalRowsMigration
+import tv.jellyvault.app.catalog.account.TmdbAccountRepository
+import tv.jellyvault.app.catalog.catalogRowTitle
+import tv.jellyvault.app.catalog.defaultCatalogRows
+import tv.jellyvault.app.catalog.defaultHomeOrder
+import tv.jellyvault.app.catalog.shelves.ShelfCatalog
+import tv.jellyvault.app.catalog.shelves.VarietyMigration
+import tv.jellyvault.app.catalog.taste.Recommender
+import tv.jellyvault.app.catalog.tmdb.TmdbException
+import tv.jellyvault.app.catalog.toBaseItem
+import tv.jellyvault.app.data.ServerRepository
+import tv.jellyvault.app.data.model.BaseItem
+import tv.jellyvault.app.data.model.HomePageSettings
+import tv.jellyvault.app.data.model.HomeRowConfig
+import tv.jellyvault.app.data.model.HomeRowViewOptions
+import tv.jellyvault.app.data.model.SUPPORTED_HOME_PAGE_SETTINGS_VERSION
+import tv.jellyvault.app.data.model.createGenreDestination
+import tv.jellyvault.app.data.model.createStudioDestination
+import tv.jellyvault.app.preferences.DefaultUserConfiguration
+import tv.jellyvault.app.preferences.HomePagePreferences
+import tv.jellyvault.app.ui.AspectRatio
+import tv.jellyvault.app.ui.Cards
+import tv.jellyvault.app.ui.HomeItemFields
+import tv.jellyvault.app.ui.ProgramItemFields
+import tv.jellyvault.app.ui.components.getGenreImageMap
+import tv.jellyvault.app.ui.formatTypeName
+import tv.jellyvault.app.ui.main.settings.Library
+import tv.jellyvault.app.ui.playback.getTypeFor
+import tv.jellyvault.app.ui.toBaseItems
+import tv.jellyvault.app.ui.toServerString
+import tv.jellyvault.app.ui.util.ResArgStringProvider
+import tv.jellyvault.app.ui.util.ResProviderStringProvider
+import tv.jellyvault.app.ui.util.ResStringProvider
+import tv.jellyvault.app.ui.util.StringProvider
+import tv.jellyvault.app.ui.util.StringStringProvider
+import tv.jellyvault.app.util.ApiRequestPager
+import tv.jellyvault.app.util.GetArtistsHandler
+import tv.jellyvault.app.util.GetGenresRequestHandler
+import tv.jellyvault.app.util.GetItemsRequestHandler
+import tv.jellyvault.app.util.GetLiveTvChannelsRequestHandler
+import tv.jellyvault.app.util.GetPersonsHandler
+import tv.jellyvault.app.util.GetProgramsDtoHandler
+import tv.jellyvault.app.util.GetRecordingsRequestHandler
+import tv.jellyvault.app.util.GetStudiosRequestHandler
+import tv.jellyvault.app.util.HomeRowLoadingState
+import tv.jellyvault.app.util.HomeRowLoadingState.Success
+import java.io.File
+import java.time.LocalDate
+import java.time.LocalDateTime
+import javax.inject.Inject
+import javax.inject.Singleton
+
+/**
+ * Handles getting home page settings and data
+ */
+@Singleton
+class HomeSettingsService
+    @Inject
+    constructor(
+        @param:ApplicationContext private val context: Context,
+        private val api: ApiClient,
+        private val serverRepository: ServerRepository,
+        private val userPreferencesService: UserPreferencesService,
+        private val navDrawerService: NavDrawerService,
+        private val latestNextUpService: LatestNextUpService,
+        private val imageUrlService: ImageUrlService,
+        private val suggestionService: SuggestionService,
+        private val displayPreferencesService: DisplayPreferencesService,
+        private val catalogRepository: CatalogRepository,
+        private val recommender: Recommender,
+        private val tmdbAccount: TmdbAccountRepository,
+    ) {
+        @OptIn(ExperimentalSerializationApi::class)
+        val jsonParser =
+            Json {
+                isLenient = true
+                ignoreUnknownKeys = true
+                allowTrailingComma = true
+            }
+
+        /**
+         * The current home page settings
+         */
+        val currentSettings = MutableStateFlow(HomePageResolvedSettings.EMPTY)
+
+        /**
+         * Saves a [HomePageSettings] to the server for the user under the display preference ID
+         *
+         * @see loadFromServer
+         */
+        suspend fun saveToServer(
+            userId: UUID,
+            settings: HomePageSettings,
+            displayPreferencesId: String = DisplayPreferencesService.DEFAULT_DISPLAY_PREF_ID,
+        ) {
+            displayPreferencesService.updateDisplayPreferences(userId, displayPreferencesId) {
+                put(CUSTOM_PREF_ID, jsonParser.encodeToString(settings))
+            }
+        }
+
+        /**
+         * Reads a [HomePageSettings] from the server for the user and display preference ID
+         *
+         * Returns null if there is none saved
+         *
+         * @see saveToServer
+         */
+        suspend fun loadFromServer(
+            userId: UUID,
+            displayPreferencesId: String = DisplayPreferencesService.DEFAULT_DISPLAY_PREF_ID,
+        ): HomePageSettings? =
+            displayPreferencesService
+                .getDisplayPreferences(userId, displayPreferencesId)
+                .customPrefs[CUSTOM_PREF_ID]
+                ?.let {
+                    val jsonElement = jsonParser.parseToJsonElement(it)
+                    decode(jsonElement)
+                }
+
+        /**
+         * Computes the filename for locally saved [HomePageSettings]
+         */
+        private fun filename(userId: UUID) = "${CUSTOM_PREF_ID}_${userId.toServerString()}.json"
+
+        /**
+         * Save the [HomePageSettings] for the user locally on the device
+         *
+         * @see loadFromLocal
+         */
+        @OptIn(ExperimentalSerializationApi::class)
+        suspend fun saveToLocal(
+            userId: UUID,
+            settings: HomePageSettings,
+        ) {
+            val dir = File(context.filesDir, CUSTOM_PREF_ID)
+            dir.mkdirs()
+            File(dir, filename(userId)).outputStream().use {
+                jsonParser.encodeToStream(settings, it)
+            }
+        }
+
+        /**
+         * Reads [HomePageSettings] for the user if it exists
+         *
+         * @see saveToLocal
+         */
+        @OptIn(ExperimentalSerializationApi::class)
+        suspend fun loadFromLocal(userId: UUID): HomePageSettings? {
+            val dir = File(context.filesDir, CUSTOM_PREF_ID)
+            val file = File(dir, filename(userId))
+            return if (file.exists()) {
+                val fileContents = file.readText()
+                val jsonElement = jsonParser.parseToJsonElement(fileContents)
+                decode(jsonElement)
+            } else {
+                null
+            }
+        }
+
+        /**
+         * Decodes [HomePageSettings] from a [JsonElement] skipping any unknown/unparsable rows
+         *
+         * This is public only for testing
+         */
+        fun decode(element: JsonElement): HomePageSettings {
+            val version = element.jsonObject["version"]?.jsonPrimitive?.intOrNull
+            if (version == null || version > SUPPORTED_HOME_PAGE_SETTINGS_VERSION) {
+                throw UnsupportedHomeSettingsVersionException(version)
+            }
+            val rowsElement = element.jsonObject["rows"]?.jsonArray
+            val rows =
+                rowsElement
+                    ?.mapNotNull { row ->
+                        try {
+                            jsonParser.decodeFromJsonElement<HomeRowConfig>(row)
+                        } catch (ex: Exception) {
+                            Timber.w(ex, "Unknown row %s", row)
+                            // TODO maybe use placeholder instead of null?
+                            null
+                        }
+                    }.orEmpty()
+            return HomePageSettings(rows, version)
+        }
+
+        /**
+         * Loads [HomePageSettings] into [currentSettings]
+         *
+         * First checks locally, then on the server, and finally creates a default if needed
+         *
+         * Does not persist either the server nor default
+         */
+        suspend fun loadCurrentSettings(userId: UUID) {
+            Timber.v("Getting setting for %s", userId)
+            // User local then server/remote otherwise create a default
+            val settings =
+                try {
+                    val local = loadFromLocal(userId)
+                    Timber.v("Found local? %s", local != null)
+                    local
+                } catch (ex: Exception) {
+                    Timber.w(ex, "Error loading local settings")
+                    // TODO show toast?
+                    null
+                } ?: try {
+                    val remote = loadFromServer(userId)
+                    Timber.v("Found remote? %s", remote != null)
+                    remote
+                } catch (ex: Exception) {
+                    Timber.w(ex, "Error loading remote settings")
+                    null
+                }
+            val resolvedSettings =
+                if (settings != null) {
+                    Timber.v("Found settings")
+                    // Resolve
+                    val migrationDir = File(context.filesDir, CUSTOM_PREF_ID)
+                    val rows =
+                        VarietyMigration(migrationDir).migrate(
+                            filename(userId),
+                            PersonalRowsMigration(migrationDir).migrate(
+                                filename(userId),
+                                HomeOrderMigration(migrationDir).migrate(filename(userId), settings.rows),
+                            ),
+                        )
+                    if (rows != settings.rows) {
+                        // Persist the new order: the migration only runs once
+                        try {
+                            saveToLocal(userId, settings.copy(rows = rows))
+                        } catch (ex: Exception) {
+                            Timber.w(ex, "Error saving migrated home settings")
+                        }
+                    }
+                    val resolvedRows =
+                        rows.mapIndexed { index, config ->
+                            resolve(index, config)
+                        }
+                    HomePageResolvedSettings(userId, resolvedRows)
+                } else {
+                    createDefault(userId)
+                }
+
+            currentSettings.update { resolvedSettings }
+        }
+
+        /**
+         * Resolve the settings and set them to be the current settings
+         */
+        suspend fun updateCurrent(
+            userId: UUID,
+            settings: HomePageSettings,
+        ) {
+            val resolvedRows =
+                settings.rows.mapIndexed { index, config ->
+                    resolve(index, config)
+                }
+            val resolvedSettings = HomePageResolvedSettings(userId, resolvedRows)
+            currentSettings.update { resolvedSettings }
+        }
+
+        /**
+         * Create a default [HomePageResolvedSettings] using the available libraries
+         */
+        suspend fun createDefault(userId: UUID): HomePageResolvedSettings {
+            Timber.v("Creating default settings")
+            val user = serverRepository.currentUser?.takeIf { it.id == userId }
+            val userDto = serverRepository.currentUserDto?.takeIf { it.id == userId }
+            val libraries =
+                if (user != null) {
+                    navDrawerService.getFilteredUserLibraries(user, userDto?.tvAccess ?: false)
+                } else {
+                    navDrawerService.getAllUserLibraries(userId, userDto?.tvAccess ?: false)
+                }
+
+            val includedIds =
+                libraries
+                    .mapIndexed { index, library ->
+                        val parentId = library.itemId
+                        val title = getRecentlyAddedTitle(library.name)
+                        if (library.collectionType == CollectionType.LIVETV) {
+                            HomeRowConfigDisplay(
+                                id = index,
+                                title = ResStringProvider(R.string.watch_live),
+                                config = HomeRowConfig.TvPrograms(),
+                            )
+                        } else {
+                            val viewOptions = viewOptionsForCollectionType(library.collectionType)
+                            HomeRowConfigDisplay(
+                                id = index,
+                                title = title,
+                                config =
+                                    HomeRowConfig.RecentlyAdded(
+                                        parentId = parentId,
+                                        viewOptions = viewOptions,
+                                    ),
+                            )
+                        }
+                    }
+            val continueWatchingRow =
+                listOf(
+                    HomeRowConfigDisplay(
+                        id = includedIds.size + 1,
+                        title = ResStringProvider(R.string.combine_continue_next),
+                        config = HomeRowConfig.ContinueWatchingCombined(),
+                    ),
+                )
+            val catalogRows =
+                defaultCatalogRows(catalogRepository.isConfigured)
+                    .map { resolve(0, it) }
+            val rowConfig =
+                defaultHomeOrder(continueWatchingRow, catalogRows, includedIds) { it.config }
+                    .mapIndexed { index, row -> row.copy(id = index) }
+            // The default already has the personal rows: a row the user removes later must not come back
+            PersonalRowsMigration(File(context.filesDir, CUSTOM_PREF_ID)).markDone(filename(userId))
+            VarietyMigration(File(context.filesDir, CUSTOM_PREF_ID)).markDone(filename(userId))
+            return HomePageResolvedSettings(userId, rowConfig)
+        }
+
+        /**
+         * Create home page settings from the user's web UI home page settings
+         */
+        suspend fun parseFromWebConfig(userId: UUID): HomePageResolvedSettings? {
+            val customPrefs =
+                displayPreferencesService
+                    .getDisplayPreferences(
+                        displayPreferencesId = "usersettings",
+                        userId = userId,
+                        client = "emby",
+                    ).customPrefs
+            val userDto by api.userApi.getUserById(userId)
+            val config = userDto.configuration ?: DefaultUserConfiguration
+            val libraries =
+                navDrawerService
+                    .getAllUserLibraries(userId, userDto.tvAccess)
+                    .filterNot {
+                        it.itemId in config.latestItemsExcludes
+                    }
+
+            return if (customPrefs.isNotEmpty()) {
+                var id = 0
+                val rowConfigs =
+                    (0..9)
+                        .mapNotNull { idx ->
+                            val sectionType =
+                                HomeSectionType.fromString(customPrefs["homesection$idx"]?.lowercase())
+                            Timber.v(
+                                "sectionType=$sectionType, %s",
+                                customPrefs["homesection$idx"]?.lowercase(),
+                            )
+                            val config =
+                                when (sectionType) {
+                                    HomeSectionType.ACTIVE_RECORDINGS -> {
+                                        HomeRowConfigDisplay(
+                                            id = id++,
+                                            title = ResStringProvider(R.string.active_recordings),
+                                            config = HomeRowConfig.Recordings(),
+                                        )
+                                    }
+
+                                    HomeSectionType.RESUME -> {
+                                        HomeRowConfigDisplay(
+                                            id = id++,
+                                            title = ResStringProvider(R.string.continue_watching),
+                                            config = HomeRowConfig.ContinueWatching(),
+                                        )
+                                    }
+
+                                    HomeSectionType.NEXT_UP -> {
+                                        HomeRowConfigDisplay(
+                                            id = id++,
+                                            title = ResStringProvider(R.string.next_up),
+                                            config = HomeRowConfig.NextUp(),
+                                        )
+                                    }
+
+                                    HomeSectionType.LIVE_TV -> {
+                                        if (userDto.tvAccess) {
+                                            HomeRowConfigDisplay(
+                                                id = id++,
+                                                title = ResStringProvider(R.string.watch_live),
+                                                config = HomeRowConfig.TvPrograms(),
+                                            )
+                                        } else {
+                                            null
+                                        }
+                                    }
+
+                                    HomeSectionType.LATEST_MEDIA -> {
+                                        // Handled below
+                                        null
+                                    }
+
+                                    // Unsupported
+                                    HomeSectionType.RESUME_AUDIO,
+                                    HomeSectionType.RESUME_BOOK,
+                                    -> {
+                                        null
+                                    }
+
+                                    HomeSectionType.SMALL_LIBRARY_TILES,
+                                    HomeSectionType.LIBRARY_BUTTONS,
+                                    HomeSectionType.NONE,
+                                    null,
+                                    -> {
+                                        null
+                                    }
+                                }
+                            if (sectionType == HomeSectionType.LATEST_MEDIA) {
+                                libraries.map { library ->
+                                    val viewOptions =
+                                        viewOptionsForCollectionType(library.collectionType)
+                                    HomeRowConfigDisplay(
+                                        id = id++,
+                                        title =
+                                            ResArgStringProvider(
+                                                R.string.recently_added_in,
+                                                library.name ?: "",
+                                            ),
+                                        config =
+                                            HomeRowConfig.RecentlyAdded(
+                                                parentId = library.itemId,
+                                                viewOptions = viewOptions,
+                                            ),
+                                    )
+                                }
+                            } else if (config != null) {
+                                listOf(config)
+                            } else {
+                                null
+                            }
+                        }.flatten()
+                HomePageResolvedSettings(userId, rowConfigs)
+            } else {
+                null
+            }
+        }
+
+        /**
+         * Converts a [HomeRowConfig] into [HomeRowConfigDisplay] for UI purposes
+         */
+        suspend fun resolve(
+            id: Int,
+            config: HomeRowConfig,
+        ): HomeRowConfigDisplay =
+            when (config) {
+                is HomeRowConfig.ByParent -> {
+                    val name = getItemName(null, config.parentId)
+                    HomeRowConfigDisplay(
+                        id,
+                        name,
+                        config,
+                    )
+                }
+
+                is HomeRowConfig.ContinueWatching -> {
+                    HomeRowConfigDisplay(
+                        id,
+                        ResStringProvider(R.string.continue_watching),
+                        config,
+                    )
+                }
+
+                is HomeRowConfig.ContinueWatchingCombined -> {
+                    HomeRowConfigDisplay(
+                        id,
+                        ResStringProvider(R.string.combine_continue_next),
+                        config,
+                    )
+                }
+
+                is HomeRowConfig.Genres -> {
+                    val title = getItemName(R.string.genres_in, config.parentId)
+                    HomeRowConfigDisplay(
+                        id,
+                        title,
+                        config,
+                    )
+                }
+
+                is HomeRowConfig.Studios -> {
+                    val title = getItemName(R.string.studios_in, config.parentId)
+                    HomeRowConfigDisplay(
+                        id,
+                        title,
+                        config,
+                    )
+                }
+
+                is HomeRowConfig.GetItems -> {
+                    HomeRowConfigDisplay(id, StringStringProvider(config.name), config)
+                }
+
+                is HomeRowConfig.NextUp -> {
+                    HomeRowConfigDisplay(
+                        id,
+                        ResStringProvider(R.string.next_up),
+                        config,
+                    )
+                }
+
+                is HomeRowConfig.RecentlyAdded -> {
+                    val title = getItemName(R.string.recently_added_in, config.parentId)
+                    HomeRowConfigDisplay(
+                        id,
+                        title,
+                        config,
+                    )
+                }
+
+                is HomeRowConfig.RecentlyReleased -> {
+                    val title = getItemName(R.string.recently_released_in, config.parentId)
+                    HomeRowConfigDisplay(
+                        id,
+                        title,
+                        config,
+                    )
+                }
+
+                is HomeRowConfig.Favorite -> {
+                    val name =
+                        ResProviderStringProvider(
+                            R.string.favorite_items_title,
+                            ResStringProvider(formatTypeName(config.kind)),
+                        )
+                    HomeRowConfigDisplay(id, name, config)
+                }
+
+                is HomeRowConfig.Recordings -> {
+                    HomeRowConfigDisplay(
+                        id = id,
+                        title = ResStringProvider(R.string.active_recordings),
+                        config,
+                    )
+                }
+
+                is HomeRowConfig.TvPrograms -> {
+                    HomeRowConfigDisplay(
+                        id = id,
+                        title = ResStringProvider(R.string.watch_live),
+                        config,
+                    )
+                }
+
+                is HomeRowConfig.TvChannels -> {
+                    HomeRowConfigDisplay(
+                        id = id,
+                        title = ResStringProvider(R.string.channels),
+                        config,
+                    )
+                }
+
+                is HomeRowConfig.Suggestions -> {
+                    val title = getItemName(R.string.suggestions_for, config.parentId)
+                    HomeRowConfigDisplay(
+                        id = id,
+                        title = title,
+                        config,
+                    )
+                }
+
+                is HomeRowConfig.TmdbTrending,
+                is HomeRowConfig.TmdbGenre,
+                is HomeRowConfig.TmdbForYou,
+                is HomeRowConfig.TmdbBecause,
+                is HomeRowConfig.TmdbShelves,
+                is HomeRowConfig.TmdbShelf,
+                is HomeRowConfig.TmdbWatchlist,
+                -> {
+                    HomeRowConfigDisplay(id, catalogRowTitle(config)!!, config)
+                }
+            }
+
+        private suspend fun getItemName(
+            @StringRes stringRes: Int?,
+            itemId: UUID,
+            default: StringProvider = StringStringProvider(""),
+        ): StringProvider =
+            try {
+                api.userLibraryApi
+                    .getItem(
+                        userId = serverRepository.currentUser?.id,
+                        itemId = itemId,
+                    ).content.name
+                    ?.let {
+                        if (stringRes == null) {
+                            StringStringProvider(it)
+                        } else {
+                            ResArgStringProvider(stringRes, it)
+                        }
+                    } ?: default
+            } catch (ex: Exception) {
+                Timber.e(ex, "Could not get name for %s", itemId)
+                ResStringProvider(R.string.unknown)
+            }
+
+        /**
+         * Fetch the data from the server for a given [HomeRowConfig]
+         */
+        suspend fun fetchDataForRow(
+            row: HomeRowConfig,
+            scope: CoroutineScope,
+            prefs: HomePagePreferences,
+            userDto: UserDto,
+            libraries: List<Library>,
+            limit: Int = prefs.maxItemsPerRow,
+            isRefresh: Boolean,
+            usePaging: Boolean = false,
+        ): HomeRowLoadingState =
+            when (row) {
+                is HomeRowConfig.ContinueWatching -> {
+                    val resume =
+                        latestNextUpService.getResume(
+                            userDto.id,
+                            limit,
+                            true,
+                            row.viewOptions.useSeries,
+                        )
+
+                    Success(
+                        title = ResStringProvider(R.string.continue_watching),
+                        items = resume,
+                        viewOptions = row.viewOptions,
+                        rowType = row,
+                        showViewMore = resume.size >= limit,
+                    )
+                }
+
+                is HomeRowConfig.NextUp -> {
+                    val nextUp =
+                        latestNextUpService.getNextUp(
+                            userDto.id,
+                            limit,
+                            prefs.enableRewatchingNextUp,
+                            false,
+                            prefs.maxDaysNextUp,
+                            row.viewOptions.useSeries,
+                        )
+
+                    Success(
+                        title = ResStringProvider(R.string.next_up),
+                        items = nextUp,
+                        viewOptions = row.viewOptions,
+                        rowType = row,
+                        showViewMore = nextUp.size >= limit,
+                    )
+                }
+
+                is HomeRowConfig.ContinueWatchingCombined -> {
+                    val resume =
+                        latestNextUpService.getResume(
+                            userDto.id,
+                            limit,
+                            true,
+                            row.viewOptions.useSeries,
+                        )
+                    val nextUp =
+                        latestNextUpService.getNextUp(
+                            userDto.id,
+                            limit,
+                            prefs.enableRewatchingNextUp,
+                            false,
+                            prefs.maxDaysNextUp,
+                            row.viewOptions.useSeries,
+                        )
+                    val combined = latestNextUpService.buildCombined(resume, nextUp)
+
+                    Success(
+                        title = ResStringProvider(R.string.continue_watching),
+                        items = combined.take(limit),
+                        viewOptions = row.viewOptions,
+                        rowType = row,
+                        showViewMore = combined.size >= limit,
+                    )
+                }
+
+                is HomeRowConfig.Genres -> {
+                    val request =
+                        GetGenresRequest(
+                            parentId = row.parentId,
+                            userId = userDto.id,
+                            limit = limit,
+                        )
+                    val items =
+                        GetGenresRequestHandler
+                            .execute(api, request)
+                            .content.items
+                    val genreIds = items.map { it.id }
+                    val genreImages =
+                        getGenreImageMap(
+                            api = api,
+                            userId = serverRepository.currentUser?.id,
+                            scope = scope,
+                            imageUrlService = imageUrlService,
+                            genres = genreIds,
+                            parentId = row.parentId,
+                            includeItemTypes = null,
+                            cardWidthPx = null,
+                            useCache = isRefresh,
+                        )
+                    val library =
+                        libraries
+                            .firstOrNull { it.itemId == row.parentId }
+
+                    val title =
+                        library?.name?.let { ResArgStringProvider(R.string.genres_in, it) }
+                            ?: ResStringProvider(R.string.genres)
+                    val genres =
+                        items.map {
+                            BaseItem(
+                                it,
+                                false,
+                                genreImages[it.id],
+                                createGenreDestination(
+                                    genreId = it.id,
+                                    genreName = it.name ?: "",
+                                    parentId = row.parentId,
+                                    parentName = library?.name,
+                                    includeItemTypes =
+                                        library?.collectionType?.let {
+                                            getTypeFor(it)?.let {
+                                                listOf(it)
+                                            }
+                                        },
+                                    collectionType =
+                                        library?.collectionType
+                                            ?: CollectionType.UNKNOWN,
+                                ),
+                            )
+                        }
+
+                    Success(
+                        title,
+                        genres,
+                        viewOptions = row.viewOptions,
+                        rowType = row,
+                        showViewMore = genres.size >= limit,
+                    )
+                }
+
+                is HomeRowConfig.Studios -> {
+                    val request =
+                        GetStudiosRequest(
+                            parentId = row.parentId,
+                            userId = userDto.id,
+                            limit = limit,
+                            includeItemTypes = listOf(BaseItemKind.SERIES),
+                        )
+                    val items =
+                        GetStudiosRequestHandler
+                            .execute(api, request)
+                            .content.items
+                    val library =
+                        libraries
+                            .firstOrNull { it.itemId == row.parentId }
+                    val title =
+                        library?.name?.let { ResArgStringProvider(R.string.studios_in, it) }
+                            ?: ResStringProvider(R.string.studios)
+                    val studios =
+                        items.map {
+                            val imageUrl =
+                                imageUrlService.getItemImageUrl(
+                                    itemId = it.id,
+                                    imageType = ImageType.THUMB,
+                                )
+                            BaseItem(
+                                it,
+                                false,
+                                imageUrl,
+                                createStudioDestination(
+                                    studioId = it.id,
+                                    name = it.name ?: "",
+                                    parentId = row.parentId,
+                                    parentName = library?.name,
+                                    includeItemTypes =
+                                        library?.collectionType?.let {
+                                            getTypeFor(it)?.let {
+                                                listOf(it)
+                                            }
+                                        },
+                                ),
+                            )
+                        }
+
+                    Success(
+                        title,
+                        studios,
+                        viewOptions = row.viewOptions,
+                        showViewMore = studios.size >= limit,
+                    )
+                }
+
+                is HomeRowConfig.RecentlyAdded -> {
+                    val library = libraries.firstOrNull { it.itemId == row.parentId }
+                    val title = getRecentlyAddedTitle(library?.name)
+                    val request =
+                        GetLatestMediaRequest(
+                            fields = library.itemFields,
+                            imageTypeLimit = 1,
+                            parentId = row.parentId,
+                            groupItems = true,
+                            limit = limit,
+                            isPlayed = null, // Server will handle user's preference
+                        )
+                    val latest =
+                        api.userLibraryApi
+                            .getLatestMedia(request)
+                            .content
+                            .map { BaseItem(it, row.viewOptions.useSeries) }
+                            .let {
+                                Success(
+                                    title,
+                                    it,
+                                    row.viewOptions,
+                                    rowType = row,
+                                    showViewMore = it.size >= limit,
+                                )
+                            }
+                    latest
+                }
+
+                is HomeRowConfig.RecentlyReleased -> {
+                    val library = libraries.firstOrNull { it.itemId == row.parentId }
+                    val title =
+                        library?.name?.let {
+                            ResArgStringProvider(R.string.recently_released_in, it)
+                        } ?: ResStringProvider(R.string.recently_released)
+                    val request =
+                        GetItemsRequest(
+                            parentId = row.parentId,
+                            limit = limit,
+                            sortBy =
+                                listOf(
+                                    ItemSortBy.PREMIERE_DATE,
+                                    ItemSortBy.SERIES_SORT_NAME,
+                                    ItemSortBy.AIRED_EPISODE_ORDER,
+                                ),
+                            sortOrder =
+                                listOf(
+                                    SortOrder.DESCENDING,
+                                    SortOrder.ASCENDING,
+                                    SortOrder.DESCENDING,
+                                ),
+                            fields = library.itemFields,
+                            recursive = true,
+                            maxPremiereDate = LocalDateTime.now(),
+                            isUnaired = false,
+                        )
+                    if (usePaging) {
+                        ApiRequestPager(
+                            api,
+                            request,
+                            GetItemsRequestHandler,
+                            scope,
+                            useSeriesForPrimary = row.viewOptions.useSeries,
+                        ).init()
+                    } else {
+                        GetItemsRequestHandler
+                            .execute(api, request)
+                            .content.items
+                            .map { BaseItem.from(it, api, row.viewOptions.useSeries) }
+                    }.let {
+                        Success(
+                            title,
+                            it,
+                            row.viewOptions,
+                            rowType = row,
+                            showViewMore = it.size >= limit,
+                        )
+                    }
+                }
+
+                is HomeRowConfig.ByParent -> {
+                    val library = libraries.firstOrNull { it.itemId == row.parentId }
+                    val request =
+                        GetItemsRequest(
+                            userId = userDto.id,
+                            parentId = row.parentId,
+                            recursive = row.recursive,
+                            sortBy =
+                                row.sort?.let {
+                                    buildList {
+                                        if (it.sort == ItemSortBy.RANDOM) {
+                                            add(ItemSortBy.SORT_NAME)
+                                            add(ItemSortBy.RANDOM)
+                                        } else {
+                                            add(it.sort)
+                                            if (it.sort != ItemSortBy.SORT_NAME) {
+                                                add(ItemSortBy.SORT_NAME)
+                                            }
+                                        }
+                                    }
+                                },
+                            sortOrder =
+                                row.sort?.let {
+                                    buildList {
+                                        if (it.sort == ItemSortBy.RANDOM) {
+                                            add(SortOrder.ASCENDING)
+                                            add(it.direction)
+                                        } else {
+                                            add(it.direction)
+                                            if (it.sort != ItemSortBy.SORT_NAME) {
+                                                add(SortOrder.ASCENDING)
+                                            }
+                                        }
+                                    }
+                                },
+                            limit = limit,
+                            fields = library.itemFields,
+                        )
+
+                    // Not using getItemName because we want to throw the 404
+                    val title =
+                        api.userLibraryApi
+                            .getItem(
+                                userId = serverRepository.currentUser?.id,
+                                itemId = row.parentId,
+                            ).content.name
+                            ?.let { StringStringProvider(it) }
+                            ?: ResStringProvider(R.string.collection)
+                    if (usePaging) {
+                        ApiRequestPager(
+                            api,
+                            request,
+                            GetItemsRequestHandler,
+                            scope,
+                            useSeriesForPrimary = row.viewOptions.useSeries,
+                        ).init()
+                    } else {
+                        GetItemsRequestHandler
+                            .execute(api, request)
+                            .content.items
+                            .map { BaseItem(it, row.viewOptions.useSeries) }
+                    }.let {
+                        Success(
+                            title,
+                            it,
+                            row.viewOptions,
+                            rowType = row,
+                            showViewMore = it.size >= limit,
+                        )
+                    }
+                }
+
+                is HomeRowConfig.GetItems -> {
+                    val request =
+                        row.getItems.let {
+                            if (it.limit == null) {
+                                it.copy(
+                                    userId = userDto.id,
+                                    limit = limit,
+                                )
+                            } else {
+                                it.copy(
+                                    userId = userDto.id,
+                                )
+                            }
+                        }
+                    if (usePaging) {
+                        ApiRequestPager(
+                            api,
+                            request,
+                            GetItemsRequestHandler,
+                            scope,
+                            useSeriesForPrimary = row.viewOptions.useSeries,
+                        ).init()
+                    } else {
+                        GetItemsRequestHandler
+                            .execute(api, request)
+                            .content.items
+                            .map { BaseItem(it, row.viewOptions.useSeries) }
+                    }.let {
+                        Success(
+                            StringStringProvider(row.name),
+                            it,
+                            row.viewOptions,
+                            rowType = row,
+                            showViewMore = it.size >= limit,
+                        )
+                    }
+                }
+
+                is HomeRowConfig.Favorite -> {
+                    val title =
+                        ResProviderStringProvider(
+                            R.string.favorite_items_title,
+                            ResStringProvider(formatTypeName(row.kind)),
+                        )
+                    val resultList =
+                        when (row.kind) {
+                            BaseItemKind.PERSON -> {
+                                val request =
+                                    GetPersonsRequest(
+                                        userId = userDto.id,
+                                        limit = limit,
+                                        fields = HomeItemFields,
+                                        isFavorite = true,
+                                        enableImages = true,
+                                        enableImageTypes = listOf(ImageType.PRIMARY),
+                                    )
+
+                                GetPersonsHandler.execute(api, request).toBaseItems()
+                            }
+
+                            BaseItemKind.MUSIC_ARTIST -> {
+                                val request =
+                                    GetArtistsRequest(
+                                        userId = userDto.id,
+                                        limit = limit,
+                                        fields = HomeItemFields,
+                                        isFavorite = true,
+                                    )
+                                if (usePaging) {
+                                    ApiRequestPager(
+                                        api,
+                                        request,
+                                        GetArtistsHandler,
+                                        scope,
+                                        useSeriesForPrimary = row.viewOptions.useSeries,
+                                    ).init()
+                                } else {
+                                    GetArtistsHandler
+                                        .execute(api, request)
+                                        .toBaseItems(row.viewOptions.useSeries)
+                                }
+                            }
+
+                            else -> {
+                                val fields =
+                                    if (row.kind == BaseItemKind.BOX_SET) {
+                                        HomeItemFieldsBoxSets
+                                    } else {
+                                        HomeItemFields
+                                    }
+                                val request =
+                                    GetItemsRequest(
+                                        userId = userDto.id,
+                                        recursive = true,
+                                        limit = limit,
+                                        fields = fields,
+                                        includeItemTypes = listOf(row.kind),
+                                        isFavorite = true,
+                                    )
+                                if (usePaging) {
+                                    ApiRequestPager(
+                                        api,
+                                        request,
+                                        GetItemsRequestHandler,
+                                        scope,
+                                        useSeriesForPrimary = row.viewOptions.useSeries,
+                                    ).init()
+                                } else {
+                                    GetItemsRequestHandler
+                                        .execute(api, request)
+                                        .toBaseItems(row.viewOptions.useSeries)
+                                }
+                            }
+                        }
+                    resultList.let {
+                        Success(
+                            title,
+                            it,
+                            row.viewOptions,
+                            rowType = row,
+                            showViewMore = it.size >= limit,
+                        )
+                    }
+                }
+
+                is HomeRowConfig.Recordings -> {
+                    val request =
+                        GetRecordingsRequest(
+                            userId = userDto.id,
+                            isInProgress = true,
+                            fields = HomeItemFields,
+                            limit = limit,
+                            enableImages = true,
+                            enableUserData = true,
+                            enableTotalRecordCount = false,
+                        )
+                    if (usePaging) {
+                        ApiRequestPager(
+                            api,
+                            request,
+                            GetRecordingsRequestHandler,
+                            scope,
+                            useSeriesForPrimary = row.viewOptions.useSeries,
+                        ).init()
+                    } else {
+                        api.liveTvApi
+                            .getRecordings(request)
+                            .content.items
+                            .map { BaseItem(it, row.viewOptions.useSeries) }
+                    }.let {
+                        Success(
+                            ResStringProvider(R.string.active_recordings),
+                            it,
+                            row.viewOptions,
+                            rowType = row,
+                            showViewMore = it.size >= limit,
+                        )
+                    }
+                }
+
+                is HomeRowConfig.TvPrograms -> {
+                    val request =
+                        GetProgramsDto(
+                            userId = userDto.id,
+                            fields = ProgramItemFields,
+                            limit = limit,
+                            enableUserData = true,
+                            enableImages = true,
+                            enableImageTypes = listOf(ImageType.PRIMARY, ImageType.LOGO),
+                            imageTypeLimit = 1,
+                            isAiring = true,
+                            minEndDate = DateTime.now().plusMinutes(1),
+                        )
+                    if (usePaging) {
+                        ApiRequestPager(
+                            api,
+                            request,
+                            GetProgramsDtoHandler,
+                            scope,
+                            useSeriesForPrimary = row.viewOptions.useSeries,
+                        ).init()
+                    } else {
+                        api.liveTvApi
+                            .getPrograms(request)
+                            .content.items
+                            .map { BaseItem(it, row.viewOptions.useSeries) }
+                    }.let {
+                        Success(
+                            ResStringProvider(R.string.watch_live),
+                            it,
+                            row.viewOptions,
+                            rowType = row,
+                            showViewMore = it.size >= limit,
+                        )
+                    }
+                }
+
+                is HomeRowConfig.TvChannels -> {
+                    val request =
+                        GetLiveTvChannelsRequest(
+                            userId = userDto.id,
+                            fields = HomeItemFields,
+                            limit = limit,
+                            enableImages = true,
+                        )
+                    if (usePaging) {
+                        ApiRequestPager(
+                            api,
+                            request,
+                            GetLiveTvChannelsRequestHandler,
+                            scope,
+                            useSeriesForPrimary = row.viewOptions.useSeries,
+                        ).init()
+                    } else {
+                        api.liveTvApi
+                            .getLiveTvChannels(request)
+                            .toBaseItems(api, row.viewOptions.useSeries)
+                    }.let {
+                        Success(
+                            ResStringProvider(R.string.channels),
+                            it,
+                            row.viewOptions,
+                            rowType = row,
+                            showViewMore = it.size >= limit,
+                        )
+                    }
+                }
+
+                is HomeRowConfig.Suggestions -> {
+                    val library =
+                        api.userLibraryApi
+                            .getItem(itemId = row.parentId)
+                            .content
+                    val title = ResArgStringProvider(R.string.suggestions_for, library.name ?: "")
+                    val itemKind = SuggestionsWorker.getTypeForCollection(library.collectionType)
+                    if (itemKind != null) {
+                        val suggestions =
+                            suggestionService
+                                .getSuggestionsFlow(row.parentId, itemKind)
+                                .firstOrNull()
+                        when (suggestions) {
+                            SuggestionsResource.Empty -> {
+                                Success(
+                                    title,
+                                    listOf(),
+                                    row.viewOptions,
+                                    rowType = row,
+                                )
+                            }
+
+                            is SuggestionsResource.Success -> {
+                                Success(
+                                    title,
+                                    suggestions.items,
+                                    row.viewOptions,
+                                    rowType = row,
+                                    showViewMore = suggestions.items.size >= limit,
+                                )
+                            }
+
+                            SuggestionsResource.Loading,
+                            null,
+                            -> {
+                                HomeRowLoadingState.Loading(title)
+                            }
+                        }
+                    } else {
+                        HomeRowLoadingState.Error(
+                            title = title,
+                            message = "Unsupported type ${library.collectionType}",
+                        )
+                    }
+                }
+
+                is HomeRowConfig.TmdbTrending,
+                is HomeRowConfig.TmdbGenre,
+                is HomeRowConfig.TmdbForYou,
+                is HomeRowConfig.TmdbBecause,
+                is HomeRowConfig.TmdbShelves,
+                is HomeRowConfig.TmdbShelf,
+                is HomeRowConfig.TmdbWatchlist,
+                -> {
+                    val title = catalogRowTitle(row)!!
+                    if (!catalogRepository.isConfigured) {
+                        Success(title, emptyList(), row.viewOptions, rowType = row, showViewMore = false)
+                    } else {
+                        try {
+                            var title = title
+                            val cards =
+                                when (row) {
+                                    is HomeRowConfig.TmdbForYou -> {
+                                        recommender.forYou(row.mediaType)
+                                    }
+
+                                    is HomeRowConfig.TmdbBecause -> {
+                                        val because = recommender.because(row.mediaType).getOrNull(row.slot)
+                                        if (because != null) title = ResArgStringProvider(R.string.discover_because, because.seedTitle)
+                                        because?.cards.orEmpty()
+                                    }
+
+                                    is HomeRowConfig.TmdbWatchlist -> {
+                                        catalogRepository.cards(tmdbAccount.snapshot().watchlist)
+                                    }
+
+                                    is HomeRowConfig.TmdbShelf -> {
+                                        ShelfCatalog.byId(row.shelfId)?.let { catalogRepository.shelfRow(it, LocalDate.now()) }.orEmpty()
+                                    }
+
+                                    is HomeRowConfig.TmdbTrending -> {
+                                        catalogRepository.trendingRow(row.mediaType)
+                                    }
+
+                                    is HomeRowConfig.TmdbGenre -> {
+                                        catalogRepository.genreRow(row.genre, row.mediaType)
+                                    }
+
+                                    else -> {
+                                        emptyList()
+                                    }
+                                }
+                            Success(
+                                title = title,
+                                // Catalog rows are long on purpose (about 40 titles), whatever the Jellyfin rows' limit
+                                items = cards.take(maxOf(limit, CATALOG_ROW_LIMIT)).map { it.toBaseItem() },
+                                viewOptions = row.viewOptions,
+                                rowType = row,
+                                showViewMore = false,
+                            )
+                        } catch (e: TmdbException) {
+                            Timber.w(e, "Catalog row failed: %s", row)
+                            HomeRowLoadingState.Error(title, message = context.getString(R.string.catalog_load_error))
+                        }
+                    }
+                }
+            }
+
+        companion object {
+            const val CUSTOM_PREF_ID = "home_settings"
+            const val CATALOG_ROW_LIMIT = 40
+        }
+    }
+
+/**
+ * A [HomeRowConfig] with a resolved ID and title so it is usable in the UI
+ */
+data class HomeRowConfigDisplay(
+    val id: Int,
+    val title: StringProvider,
+    val config: HomeRowConfig,
+)
+
+/**
+ * List of resolved [HomeRowConfig]s as [HomeRowConfigDisplay]s
+ *
+ * @see HomePageSettings
+ */
+data class HomePageResolvedSettings(
+    val userId: UUID,
+    val rows: List<HomeRowConfigDisplay>,
+) {
+    companion object {
+        val EMPTY = HomePageResolvedSettings(UUID.randomUUID(), emptyList())
+    }
+}
+
+// https://github.com/jellyfin/jellyfin/blob/v10.11.6/src/Jellyfin.Database/Jellyfin.Database.Implementations/Enums/HomeSectionType.cs
+enum class HomeSectionType(
+    val serialName: String,
+) {
+    NONE("none"),
+    SMALL_LIBRARY_TILES("smalllibrarytitles"),
+    LIBRARY_BUTTONS("librarybuttons"),
+    ACTIVE_RECORDINGS("activerecordings"),
+    RESUME("resume"),
+    RESUME_AUDIO("resumeaudio"),
+    LATEST_MEDIA("latestmedia"),
+    NEXT_UP("nextup"),
+    LIVE_TV("livetv"),
+    RESUME_BOOK("resumebook"),
+    ;
+
+    companion object {
+        fun fromString(homeKey: String?) = homeKey?.let { entries.firstOrNull { it.serialName == homeKey } }
+    }
+}
+
+class UnsupportedHomeSettingsVersionException(
+    val unsupportedVersion: Int?,
+    val maxSupportedVersion: Int = SUPPORTED_HOME_PAGE_SETTINGS_VERSION,
+) : Exception("Unsupported version $unsupportedVersion, max supported is $maxSupportedVersion")
+
+fun getRecentlyAddedTitle(name: String?): StringProvider =
+    name?.let { ResArgStringProvider(R.string.recently_added_in, it) }
+        ?: ResStringProvider(R.string.recently_added)
+
+private val Library?.itemFields: List<ItemFields>
+    get() =
+        if (this?.type == BaseItemKind.COLLECTION_FOLDER && this.collectionType == CollectionType.BOXSETS) {
+            // Get child count to show in the header
+            HomeItemFieldsBoxSets
+        } else {
+            HomeItemFields
+        }
+
+private val HomeItemFieldsBoxSets get() = HomeItemFields + listOf(ItemFields.CHILD_COUNT)
+
+fun viewOptionsForCollectionType(collectionType: CollectionType?): HomeRowViewOptions =
+    when (collectionType) {
+        CollectionType.MUSIC,
+        -> {
+            HomeRowViewOptions(
+                heightDp = Cards.HEIGHT_EPISODE,
+                aspectRatio = AspectRatio.SQUARE,
+            )
+        }
+
+        CollectionType.PHOTOS,
+        CollectionType.HOMEVIDEOS,
+        CollectionType.MUSICVIDEOS,
+        CollectionType.TRAILERS,
+        -> {
+            HomeRowViewOptions(
+                heightDp = Cards.HEIGHT_EPISODE,
+                aspectRatio = AspectRatio.WIDE,
+            )
+        }
+
+        CollectionType.LIVETV,
+        -> {
+            HomeRowViewOptions.liveTvDefault
+        }
+
+        CollectionType.MOVIES,
+        CollectionType.TVSHOWS,
+        CollectionType.BOXSETS,
+        CollectionType.BOOKS,
+        CollectionType.PLAYLISTS,
+        CollectionType.FOLDERS,
+        CollectionType.UNKNOWN,
+        null,
+        -> {
+            HomeRowViewOptions()
+        }
+    }

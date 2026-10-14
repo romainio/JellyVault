@@ -1,0 +1,603 @@
+package tv.jellyvault.app.ui.detail
+
+import android.content.Context
+import android.hardware.display.DisplayManager
+import android.media.AudioDeviceCallback
+import android.media.AudioDeviceInfo
+import android.media.AudioFormat
+import android.media.AudioManager
+import android.os.Build
+import android.util.Log
+import android.view.Display
+import androidx.compose.foundation.background
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.unit.dp
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import androidx.tv.material3.MaterialTheme
+import androidx.tv.material3.Text
+import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import org.acra.util.versionCodeLong
+import org.jellyfin.sdk.model.ClientInfo
+import org.jellyfin.sdk.model.DeviceInfo
+import tv.jellyvault.app.BuildConfig
+import tv.jellyvault.app.data.ItemPlaybackDao
+import tv.jellyvault.app.data.ServerRepository
+import tv.jellyvault.app.data.model.ItemPlayback
+import tv.jellyvault.app.preferences.UserPreferences
+import tv.jellyvault.app.ui.launchDefault
+import tv.jellyvault.app.ui.launchIO
+import tv.jellyvault.app.util.ExceptionHandler
+import tv.jellyvault.app.util.JvDispatchers
+import java.io.BufferedReader
+import java.io.InputStreamReader
+import java.util.Date
+import javax.inject.Inject
+
+@HiltViewModel
+class DebugViewModel
+    @Inject
+    constructor(
+        @param:ApplicationContext private val context: Context,
+        val serverRepository: ServerRepository,
+        val itemPlaybackDao: ItemPlaybackDao,
+        val clientInfo: ClientInfo,
+        val deviceInfo: DeviceInfo,
+    ) : ViewModel() {
+        val state = MutableStateFlow(DebugState())
+        val itemPlaybacks = MutableStateFlow<List<ItemPlayback>>(emptyList())
+        val logcat = MutableStateFlow<List<LogcatLine>>(emptyList())
+
+        val supportedModes by lazy {
+            val displayManager = context.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
+            val display = displayManager.getDisplay(Display.DEFAULT_DISPLAY)
+            display.supportedModes.orEmpty()
+        }
+
+        val av1Included by lazy {
+            try {
+                Class.forName("androidx.media3.decoder.av1.Libdav1dVideoRenderer")
+                true
+            } catch (_: ClassNotFoundException) {
+                false
+            }
+        }
+
+        val ffmpegIncluded by lazy {
+            try {
+                Class.forName("androidx.media3.decoder.ffmpeg.FfmpegAudioRenderer")
+                true
+            } catch (_: ClassNotFoundException) {
+                false
+            }
+        }
+
+        val libMpvLoaded by lazy {
+            try {
+                System.loadLibrary("player")
+                System.loadLibrary("mpv")
+                true
+            } catch (_: Exception) {
+                false
+            }
+        }
+
+        init {
+            viewModelScope.launchDefault {
+                val buildTime = Date(BuildConfig.BUILD_TIME)
+                val pkgInfo = context.packageManager.getPackageInfo(context.packageName, 0)
+                val installInfo =
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                        val installSource =
+                            context.packageManager.getInstallSourceInfo(context.packageName)
+                        buildList {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                add("Install source: ${installSource.packageSource}")
+                            }
+                            add("Installer: ${installSource.installingPackageName}")
+                            add("Initiator: ${installSource.initiatingPackageName}")
+                        }
+                    } else {
+                        listOf(
+                            context.packageManager
+                                .getInstallerPackageName(context.packageName)
+                                .toString(),
+                        )
+                    }
+
+                val appInfo =
+                    listOf(
+                        "Version Name: ${pkgInfo.versionName}",
+                        "Version Code: ${pkgInfo.versionCodeLong}",
+                        "ClientInfo:  $clientInfo",
+                        "Build type: ${BuildConfig.BUILD_TYPE}",
+                        "Build flavor: ${BuildConfig.FLAVOR}",
+                        "Build time: $buildTime",
+                        "FFMPEG included: $ffmpegIncluded",
+                        "AV1 included: $av1Included",
+                        "libmpv loaded: $libMpvLoaded",
+                        "Debug enabled: ${BuildConfig.DEBUG}",
+                        "ABIs: ${Build.SUPPORTED_ABIS.toList()}",
+                    ) + installInfo
+                state.update { it.copy(appInfo = appInfo) }
+            }
+            viewModelScope.launchDefault {
+                val deviceInfoList =
+                    listOf(
+                        "DeviceInfo:  $deviceInfo",
+                        "Manufacturer: ${Build.MANUFACTURER}",
+                        "Model: ${Build.MODEL}",
+                        "API Level: ${Build.VERSION.SDK_INT}",
+                    )
+                state.update {
+                    it.copy(
+                        deviceInfo = deviceInfoList,
+                        displayModes = supportedModes.map { it.toString() },
+                    )
+                }
+            }
+            viewModelScope.launchIO {
+                serverRepository.currentUser?.rowId?.let {
+                    val results = itemPlaybackDao.getItems(it)
+                    itemPlaybacks.value = results
+                }
+            }
+            viewModelScope.launchIO {
+                val logcat = getLogCatLines()
+                this@DebugViewModel.logcat.value = logcat
+            }
+            viewModelScope.launchDefault {
+                val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+                val callback =
+                    object : AudioDeviceCallback() {
+                        override fun onAudioDevicesAdded(addedDevices: Array<AudioDeviceInfo>) {
+                            state.update {
+                                it.copy(
+                                    audioInfo =
+                                        it.audioInfo.toMutableList().apply {
+                                            addAll(
+                                                addedDevices
+                                                    .filter { it.isSink }
+                                                    .map { it.details },
+                                            )
+                                        },
+                                )
+                            }
+                        }
+
+                        override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>) {
+                            state.update {
+                                it.copy(
+                                    audioInfo =
+                                        it.audioInfo.toMutableList().apply {
+                                            removeAll(removedDevices.map { it.details })
+                                        },
+                                )
+                            }
+                        }
+                    }
+                audioManager.registerAudioDeviceCallback(callback, null)
+                addCloseable { audioManager.unregisterAudioDeviceCallback(callback) }
+            }
+        }
+
+        companion object {
+            suspend fun getLogCatLines(): List<LogcatLine> =
+                withContext(JvDispatchers.IO) {
+                    val lineCount = 500
+                    val args =
+                        buildList {
+                            add("logcat")
+                            add("-d")
+                            add("-t")
+                            add(lineCount.toString())
+                            addAll(THIRD_PARTY_TAGS)
+                            add("*:V")
+                        }
+                    val process = ProcessBuilder().command(args).redirectErrorStream(true).start()
+                    val logLines = mutableListOf<LogcatLine>()
+                    try {
+                        val reader = BufferedReader(InputStreamReader(process.inputStream))
+                        var count = 0
+
+                        while (count < lineCount) {
+                            val line = reader.readLine()
+                            if (line != null) {
+                                val level = line.split(Regex("\\s+")).getOrNull(4)
+                                val logLevel =
+                                    when (level?.uppercase()) {
+                                        "V" -> Log.VERBOSE
+                                        "D" -> Log.DEBUG
+                                        "I" -> Log.INFO
+                                        "W" -> Log.WARN
+                                        "E" -> Log.ERROR
+                                        else -> Log.VERBOSE
+                                    }
+                                logLines.add(LogcatLine(logLevel, line))
+                            } else {
+                                break
+                            }
+                            count++
+                        }
+                    } finally {
+                        process.destroy()
+                    }
+                    return@withContext logLines
+                }
+        }
+    }
+
+data class LogcatLine(
+    val level: Int,
+    val text: String,
+)
+
+data class DebugState(
+    val appInfo: List<String> = emptyList(),
+    val deviceInfo: List<String> = emptyList(),
+    val displayModes: List<String> = emptyList(),
+    val audioInfo: List<String> = emptyList(),
+)
+
+val AudioDeviceInfo.details: String
+    get() {
+        val typeName =
+            when (type) {
+                AudioDeviceInfo.TYPE_HDMI -> "HDMI"
+                AudioDeviceInfo.TYPE_HDMI_ARC -> "ARC"
+                AudioDeviceInfo.TYPE_HDMI_EARC -> "eARC"
+                AudioDeviceInfo.TYPE_BUILTIN_SPEAKER -> "Speaker"
+                AudioDeviceInfo.TYPE_BUILTIN_SPEAKER_SAFE -> "Speaker Safe"
+                else -> "N/A"
+            }
+        val addressStr =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                address
+            } else {
+                null
+            }
+        val encodings =
+            encodings.map { enc ->
+                when (enc) {
+                    AudioFormat.ENCODING_INVALID -> "INVALID"
+
+                    AudioFormat.ENCODING_PCM_16BIT -> "PCM_16BIT"
+
+                    AudioFormat.ENCODING_PCM_8BIT -> "PCM_8BIT"
+
+                    AudioFormat.ENCODING_PCM_FLOAT -> "PCM_FLOAT"
+
+                    AudioFormat.ENCODING_AC3 -> "AC3"
+
+                    AudioFormat.ENCODING_E_AC3 -> "E_AC3"
+
+                    AudioFormat.ENCODING_DTS -> "DTS"
+
+                    AudioFormat.ENCODING_DTS_HD -> "DTS_HD"
+
+                    AudioFormat.ENCODING_MP3 -> "MP3"
+
+                    AudioFormat.ENCODING_AAC_LC -> "AAC_LC"
+
+                    AudioFormat.ENCODING_AAC_HE_V1 -> "AAC_HE_V1"
+
+                    AudioFormat.ENCODING_AAC_HE_V2 -> "AAC_HE_V2"
+
+                    AudioFormat.ENCODING_IEC61937 -> "IEC61937"
+
+                    AudioFormat.ENCODING_DOLBY_TRUEHD -> "DOLBY_TRUEHD"
+
+                    AudioFormat.ENCODING_AAC_ELD -> "AAC_ELD"
+
+                    AudioFormat.ENCODING_AAC_XHE -> "AAC_XHE"
+
+                    AudioFormat.ENCODING_AC4 -> "AC4"
+
+                    // AudioFormat.ENCODING_AC4_L4->"AC4_L4"
+
+                    AudioFormat.ENCODING_E_AC3_JOC -> "E_AC3_JOC"
+
+                    AudioFormat.ENCODING_DOLBY_MAT -> "DOLBY_MAT"
+
+                    AudioFormat.ENCODING_OPUS -> "OPUS"
+
+                    AudioFormat.ENCODING_PCM_24BIT_PACKED -> "PCM_24BIT_PACKED"
+
+                    AudioFormat.ENCODING_PCM_32BIT -> "PCM_32BIT"
+
+                    AudioFormat.ENCODING_MPEGH_BL_L3 -> "MPEGH_BL_L3"
+
+                    AudioFormat.ENCODING_MPEGH_BL_L4 -> "MPEGH_BL_L4"
+
+                    AudioFormat.ENCODING_MPEGH_LC_L3 -> "MPEGH_LC_L3"
+
+                    AudioFormat.ENCODING_MPEGH_LC_L4 -> "MPEGH_LC_L4"
+
+                    AudioFormat.ENCODING_DTS_UHD_P1 -> "DTS_UHD_P1"
+
+                    AudioFormat.ENCODING_DRA -> "DRA"
+
+                    AudioFormat.ENCODING_DTS_HD_MA -> "DTS_HD_MA"
+
+                    AudioFormat.ENCODING_DTS_UHD_P2 -> "DTS_UHD_P2"
+
+                    AudioFormat.ENCODING_DSD -> "DSD"
+
+                    AudioFormat.ENCODING_IAMF_BASE_ENHANCED_PROFILE_AAC -> "IAMF_BASE_ENHANCED_PROFILE_AAC"
+
+                    AudioFormat.ENCODING_IAMF_BASE_ENHANCED_PROFILE_FLAC -> "IAMF_BASE_ENHANCED_PROFILE_FLAC"
+
+                    AudioFormat.ENCODING_IAMF_BASE_ENHANCED_PROFILE_OPUS -> "IAMF_BASE_ENHANCED_PROFILE_OPUS"
+
+                    AudioFormat.ENCODING_IAMF_BASE_ENHANCED_PROFILE_PCM -> "IAMF_BASE_ENHANCED_PROFILE_PCM"
+
+                    AudioFormat.ENCODING_IAMF_BASE_PROFILE_AAC -> "IAMF_BASE_PROFILE_AAC"
+
+                    AudioFormat.ENCODING_IAMF_BASE_PROFILE_FLAC -> "IAMF_BASE_PROFILE_FLAC"
+
+                    AudioFormat.ENCODING_IAMF_BASE_PROFILE_OPUS -> "IAMF_BASE_PROFILE_OPUS"
+
+                    AudioFormat.ENCODING_IAMF_BASE_PROFILE_PCM -> "IAMF_BASE_PROFILE_PCM"
+
+                    AudioFormat.ENCODING_IAMF_SIMPLE_PROFILE_AAC -> "IAMF_SIMPLE_PROFILE_AAC"
+
+                    AudioFormat.ENCODING_IAMF_SIMPLE_PROFILE_FLAC -> "IAMF_SIMPLE_PROFILE_FLAC"
+
+                    AudioFormat.ENCODING_IAMF_SIMPLE_PROFILE_OPUS -> "IAMF_SIMPLE_PROFILE_OPUS"
+
+                    AudioFormat.ENCODING_IAMF_SIMPLE_PROFILE_PCM -> "IAMF_SIMPLE_PROFILE_PCM"
+
+                    else -> "invalid encoding $enc"
+                }
+            }
+        return "AudioDeviceInfo(id=$id, type=$type ($typeName), " +
+            "channelCounts=${channelCounts.contentToString()}, " +
+            "encodings=$encodings, " +
+            "productName=$productName, address=$addressStr)"
+    }
+
+@Composable
+fun DebugPage(
+    preferences: UserPreferences,
+    modifier: Modifier = Modifier,
+    viewModel: DebugViewModel = hiltViewModel(),
+) {
+    val columnState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    val state by viewModel.state.collectAsState()
+
+    fun scroll(
+        reverse: Boolean = false,
+        scrollAmount: Float = 100f,
+    ) {
+        scope.launch(ExceptionHandler()) {
+            columnState.scrollBy(if (reverse) -scrollAmount else scrollAmount)
+        }
+    }
+
+    val itemPlaybacks by viewModel.itemPlaybacks.collectAsState()
+    val logcat by viewModel.logcat.collectAsState()
+
+    val padding = remember { PaddingValues(bottom = 32.dp) }
+
+    LazyColumn(
+        state = columnState,
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(0.dp),
+        modifier =
+            modifier
+                .focusable()
+                .background(
+                    MaterialTheme.colorScheme.surface,
+                ).onKeyEvent {
+                    if (it.type == KeyEventType.KeyUp) {
+                        return@onKeyEvent false
+                    }
+                    if (it.key == Key.DirectionDown) {
+                        scroll(false)
+                        return@onKeyEvent true
+                    }
+                    if (it.key == Key.DirectionUp) {
+                        scroll(true)
+                        return@onKeyEvent true
+                    }
+                    if (it.key == Key.MediaFastForward || it.key == Key.PageDown) {
+                        scroll(false, 300f)
+                        return@onKeyEvent true
+                    }
+                    if (it.key == Key.MediaSkipBackward || it.key == Key.PageUp) {
+                        scroll(true, 300f)
+                        return@onKeyEvent true
+                    }
+                    return@onKeyEvent false
+                },
+    ) {
+        item {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(padding),
+            ) {
+                SectionTitle("App Information")
+                state.appInfo.forEach {
+                    BodyText(it)
+                }
+            }
+        }
+        item {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(padding),
+            ) {
+                SectionTitle("Device Information")
+                state.deviceInfo.forEach {
+                    BodyText(it)
+                }
+
+                SubSectionTitle("Display Modes")
+                state.displayModes.forEach {
+                    BodyText(it)
+                }
+
+                SubSectionTitle("Audio Devices")
+                state.audioInfo.forEach {
+                    BodyText(it)
+                }
+            }
+        }
+        item {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(padding),
+            ) {
+                SectionTitle("AppPreferences")
+                BodyText(preferences.appPreferences.toString())
+            }
+        }
+        item {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(padding),
+            ) {
+                SectionTitle("User Information")
+                BodyText("Current server: ${viewModel.serverRepository.currentServer}")
+                BodyText("Current user: ${viewModel.serverRepository.currentUser}")
+                BodyText("User server settings: ${viewModel.serverRepository.currentUserDto?.configuration}")
+            }
+        }
+        item {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(padding),
+            ) {
+                SectionTitle("Database")
+
+                SubSectionTitle("ItemPlayback")
+                itemPlaybacks.forEach {
+                    BodyText(it.toString())
+                }
+            }
+        }
+        item {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                SectionTitle("Logcat")
+            }
+        }
+        items(logcat) { (level, line) ->
+            val color =
+                when (level) {
+                    Log.VERBOSE -> MaterialTheme.colorScheme.onSurface
+                    Log.DEBUG -> Color(0xff2bc4cf)
+                    Log.INFO -> Color(0xff2bcf8b)
+                    Log.WARN -> Color(0xffdde663)
+                    Log.ERROR -> Color(0xffe67063)
+                    else -> MaterialTheme.colorScheme.onSurface
+                }
+            Text(
+                text = line,
+                style = MaterialTheme.typography.bodySmall,
+                color = color,
+            )
+        }
+    }
+}
+
+@Composable
+private fun SectionTitle(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.headlineMedium,
+        color = MaterialTheme.colorScheme.onSurface,
+    )
+}
+
+@Composable
+private fun SubSectionTitle(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.titleMedium,
+        color = MaterialTheme.colorScheme.onSurface,
+    )
+}
+
+@Composable
+private fun BodyText(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurface,
+    )
+}
+
+private val THIRD_PARTY_TAGS =
+    listOf(
+        "libc:F",
+        "ExoPlayerImpl:W",
+        // FireTV
+        "Codec2Client:E",
+        "CCodecBuffers:E",
+        "CCodecConfig:E",
+        "okhttp.Http2:W",
+        "okhttp.TaskRunner:W",
+        "LruBitmapPool:W",
+        "FragmentManager:W",
+        "ConfigStore:W",
+        "GlideRequest:W",
+        "FactoryPools:W",
+        "ViewTarget:W",
+        "Engine:W",
+        "Downsampler:W",
+        "TransformationUtils:W",
+        "DecodeJob:W",
+        "BufferPoolAccessor2.0:W",
+        "ExifInterface:W",
+        "MediaCodec:W",
+        "SurfaceUtils:W",
+        "ByteArrayPool:W",
+        "HardwareConfig:W",
+        "DfltImageHeaderParser:W",
+    )

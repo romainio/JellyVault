@@ -1,0 +1,599 @@
+package tv.jellyvault.app
+
+import android.content.Context
+import android.content.Intent
+import android.content.res.Configuration
+import android.os.Bundle
+import android.view.KeyEvent
+import android.view.WindowManager
+import android.widget.Toast
+import androidx.activity.compose.setContent
+import androidx.activity.viewModels
+import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.datastore.core.DataStore
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.viewModelScope
+import androidx.navigation3.runtime.NavBackStack
+import androidx.tv.material3.ExperimentalTvMaterial3Api
+import androidx.tv.material3.MaterialTheme
+import androidx.tv.material3.Surface
+import dagger.hilt.android.AndroidEntryPoint
+import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
+import okhttp3.OkHttpClient
+import org.jellyfin.sdk.model.serializer.toUUIDOrNull
+import timber.log.Timber
+import tv.jellyvault.app.data.ServerRepository
+import tv.jellyvault.app.preferences.AppPreferences
+import tv.jellyvault.app.preferences.PlayerBackend
+import tv.jellyvault.app.services.AppUpgradeHandler
+import tv.jellyvault.app.services.BackdropService
+import tv.jellyvault.app.services.DatePlayedInvalidationService
+import tv.jellyvault.app.services.DeviceProfileService
+import tv.jellyvault.app.services.ImageUrlService
+import tv.jellyvault.app.services.IntentResult
+import tv.jellyvault.app.services.IntentService
+import tv.jellyvault.app.services.LatestNextUpSchedulerService
+import tv.jellyvault.app.services.NavigationManager
+import tv.jellyvault.app.services.PlaybackLifecycleObserver
+import tv.jellyvault.app.services.RefreshRateService
+import tv.jellyvault.app.services.ScreensaverService
+import tv.jellyvault.app.services.ServerEventListener
+import tv.jellyvault.app.services.SetupDestination
+import tv.jellyvault.app.services.SetupNavigationManager
+import tv.jellyvault.app.services.StartupGate
+import tv.jellyvault.app.services.SuggestionsSchedulerService
+import tv.jellyvault.app.services.UpdateChecker
+import tv.jellyvault.app.services.UserPreferencesService
+import tv.jellyvault.app.services.UserSwitchListener
+import tv.jellyvault.app.services.hilt.AuthOkHttpClient
+import tv.jellyvault.app.services.tvprovider.TvProviderSchedulerService
+import tv.jellyvault.app.ui.CoilConfig
+import tv.jellyvault.app.ui.LocalImageUrlService
+import tv.jellyvault.app.ui.collectLatestIn
+import tv.jellyvault.app.ui.components.LoadingPage
+import tv.jellyvault.app.ui.components.StartupIntro
+import tv.jellyvault.app.ui.launchDefault
+import tv.jellyvault.app.ui.nav.Destination
+import tv.jellyvault.app.ui.playback.PlayExternalViewModel
+import tv.jellyvault.app.ui.showToast
+import tv.jellyvault.app.ui.theme.JellyVaultTheme
+import tv.jellyvault.app.ui.theme.colors.PurpleThemeColors
+import tv.jellyvault.app.ui.util.ProvideLocalClock
+import tv.jellyvault.app.util.DebugLogTree
+import tv.jellyvault.app.util.ExceptionHandler
+import tv.jellyvault.app.util.JvDispatchers
+import tv.jellyvault.app.util.requestSerializersModule
+import javax.inject.Inject
+import kotlin.time.Duration.Companion.milliseconds
+
+@AndroidEntryPoint
+class MainActivity : AppCompatActivity() {
+    private val viewModel: MainActivityViewModel by viewModels()
+    private val playExternalViewModel: PlayExternalViewModel by viewModels()
+
+    @Inject
+    lateinit var userPreferencesDataStore: DataStore<AppPreferences>
+
+    @Inject
+    lateinit var userPreferencesService: UserPreferencesService
+
+    @AuthOkHttpClient
+    @Inject
+    lateinit var okHttpClient: OkHttpClient
+
+    @Inject
+    lateinit var navigationManager: NavigationManager
+
+    @Inject
+    lateinit var setupNavigationManager: SetupNavigationManager
+
+    @Inject
+    lateinit var startupGate: StartupGate
+
+    @Inject
+    lateinit var updateChecker: UpdateChecker
+
+    @Inject
+    lateinit var playbackLifecycleObserver: PlaybackLifecycleObserver
+
+    @Inject
+    lateinit var imageUrlService: ImageUrlService
+
+    @Inject
+    lateinit var refreshRateService: RefreshRateService
+
+    @Inject
+    lateinit var userSwitchListener: UserSwitchListener
+
+    @Inject
+    lateinit var tvProviderSchedulerService: TvProviderSchedulerService
+
+    @Inject
+    lateinit var suggestionsSchedulerService: SuggestionsSchedulerService
+
+    @Inject
+    lateinit var latestNextUpSchedulerService: LatestNextUpSchedulerService
+
+    @Inject
+    lateinit var backdropService: BackdropService
+
+    // Note: unused but injected to ensure it is created
+    @Inject
+    lateinit var serverEventListener: ServerEventListener
+
+    // Note: unused but injected to ensure it is created
+    @Inject
+    lateinit var datePlayedInvalidationService: DatePlayedInvalidationService
+
+    @Inject
+    lateinit var screensaverService: ScreensaverService
+
+    @Inject
+    lateinit var intentService: IntentService
+
+    private var signInAuto = true
+    private var playerBackend: PlayerBackend? = null
+
+    private val json =
+        Json {
+            classDiscriminator = "_type"
+            serializersModule = requestSerializersModule
+        }
+
+    @OptIn(ExperimentalTvMaterial3Api::class)
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        instance = this
+        Timber.i("MainActivity.onCreate: savedInstanceState is null=${savedInstanceState == null}")
+        lifecycle.addObserver(playbackLifecycleObserver)
+
+        val backStackStr = savedInstanceState?.getString(KEY_BACK_STACK)
+        val restoredBackStack =
+            if (backStackStr != null) {
+                try {
+                    json.decodeFromString<List<Destination>>(backStackStr)
+                } catch (ex: Exception) {
+                    // Best-effort: a previously persisted back stack we can no longer decode
+                    // must not crash startup; fall back to a fresh start destination.
+                    Timber.w(ex, "Could not restore back stack; starting fresh")
+                    null
+                }
+            } else {
+                null
+            }
+        if (restoredBackStack != null) {
+            Timber.d("Restoring back stack")
+            var backStack = restoredBackStack
+            if (!playExternalViewModel.launched.value) {
+                val lastDest = backStack.lastOrNull()
+                if (lastDest.isPlayback) {
+                    Timber.v("Restoring back stack without playback")
+                    backStack = backStack.toMutableList().apply { removeAt(lastIndex) }
+                }
+            }
+            navigationManager.backStack = NavBackStack(*backStack.toTypedArray())
+        } else {
+            navigationManager.backStack = NavBackStack(Destination.Home())
+        }
+
+        viewModel.serverRepository.currentUserFlow
+            .onEach { user ->
+                withContext(JvDispatchers.Main) {
+                    if (user?.hasPin == true) {
+                        window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                    } else {
+                        window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                    }
+                }
+            }.catch { ex ->
+                Timber.e(ex, "Error with settings flag secure")
+            }.launchIn(lifecycleScope)
+
+        screensaverService.keepScreenOn
+            .onEach { keepScreenOn ->
+                Timber.v("keepScreenOn: %s", keepScreenOn)
+                withContext(JvDispatchers.Main) {
+                    if (keepScreenOn) {
+                        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                    } else {
+                        window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                    }
+                }
+            }.catch { ex ->
+                Timber.e(ex, "Error with keepScreenOn")
+            }.launchIn(lifecycleScope)
+
+        userPreferencesDataStore.data.collectLatestIn(lifecycleScope) { prefs ->
+            signInAuto = prefs.signInAutomatically
+            playerBackend = prefs.playbackPreferences.playerBackend
+        }
+
+        viewModel.appStart(intent)
+        setContent {
+            MaterialTheme(colorScheme = PurpleThemeColors.darkScheme) {
+                Surface(Modifier.fillMaxSize()) {
+                    val userPreferences by userPreferencesService.flow.collectAsState(null)
+                    // The intro covers the start until the home is filled (rows and posters), or another first screen is there
+                    val homeFilled by startupGate.open.collectAsState()
+                    val setupScreen = setupNavigationManager.backStack.lastOrNull()
+                    val introReady =
+                        userPreferences != null &&
+                            setupScreen != SetupDestination.Loading &&
+                            (
+                                setupScreen !is SetupDestination.AppContent || homeFilled ||
+                                    navigationManager.backStack.lastOrNull() !is Destination.Home
+                            )
+                    if (userPreferences == null) {
+                        // Show loading page if it is taking a while to get app preferences
+                        var showLoading by remember { mutableStateOf(false) }
+                        LaunchedEffect(Unit) {
+                            delay(500.milliseconds)
+                            Timber.i("Showing loading page")
+                            showLoading = true
+                        }
+                        if (showLoading) {
+                            Box(
+                                modifier =
+                                    Modifier
+                                        .fillMaxSize()
+                                        .background(Color.Black),
+                            ) {
+                                LoadingPage()
+                            }
+                        }
+                    } else {
+                        userPreferences?.let { userPreferences ->
+                            val appPreferences = userPreferences.appPreferences
+                            CoilConfig(
+                                prefs = appPreferences,
+                                okHttpClient = okHttpClient,
+                                debugLogging = false,
+                                enableCache = true,
+                            )
+                            LaunchedEffect(appPreferences.debugLogging) {
+                                DebugLogTree.INSTANCE.enabled = appPreferences.debugLogging
+                            }
+                            CompositionLocalProvider(LocalImageUrlService provides imageUrlService) {
+                                JellyVaultTheme(
+                                    true,
+                                    appThemeColors = appPreferences.interfacePreferences.appThemeColors,
+                                ) {
+                                    ProvideLocalClock {
+                                        MainContent(
+                                            backStack = setupNavigationManager.backStack,
+                                            navigationManager = navigationManager,
+                                            userPreferences = userPreferences,
+                                            backdropService = backdropService,
+                                            screensaverService = screensaverService,
+                                            modifier = Modifier.fillMaxSize(),
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    StartupIntro(ready = introReady, modifier = Modifier.fillMaxSize())
+                }
+            }
+        }
+    }
+
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (screensaverService.state.value.run { show || showDim }) {
+            screensaverService.stop(false)
+            screensaverService.pulse()
+            return true
+        } else {
+            screensaverService.pulse()
+            return super.dispatchKeyEvent(event)
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        Timber.d("onResume")
+        viewModel.appResume()
+        lifecycleScope.launchDefault {
+            screensaverService.pulse()
+        }
+    }
+
+    override fun onRestart() {
+        super.onRestart()
+        Timber.d("onRestart")
+        viewModel.appStart(null)
+        if (!playExternalViewModel.launched.value) {
+            // If restarting during playback that is not external, go back a page
+            val lastDest = navigationManager.backStack.lastOrNull()
+            if (lastDest.isPlayback) {
+                Timber.v("onRestart: go back from playback")
+                navigationManager.goBack()
+            }
+        }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        Timber.d("onStop")
+        screensaverService.stop(true)
+        tvProviderSchedulerService.launchOneTimeRefresh()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        Timber.d("onPause")
+    }
+
+    override fun onStart() {
+        super.onStart()
+        Timber.d("onStart")
+
+        lifecycleScope.launchDefault {
+            val appPreferences = userPreferencesDataStore.data.first()
+            if (UpdateChecker.ACTIVE && appPreferences.autoCheckForUpdates) {
+                try {
+                    updateChecker.maybeShowUpdateToast(
+                        appPreferences.updateUrl,
+                    )
+                } catch (ex: Exception) {
+                    Timber.w(
+                        ex,
+                        "Exception during update check",
+                    )
+                }
+            }
+        }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        Timber.d("onSaveInstanceState")
+        try {
+            val str = json.encodeToString(navigationManager.backStack.toList())
+            outState.putString(KEY_BACK_STACK, str)
+        } catch (ex: Exception) {
+            // Best-effort: some destinations carry types we can't serialize; skip persisting
+            // the back stack rather than crashing in onSaveInstanceState.
+            Timber.w(ex, "Could not persist back stack; skipping")
+        }
+        outState.putBoolean(KEY_EXTERNAL_PLAYER, playerBackend == PlayerBackend.EXTERNAL_PLAYER)
+    }
+
+    override fun onRestoreInstanceState(savedInstanceState: Bundle) {
+        super.onRestoreInstanceState(savedInstanceState)
+        Timber.d("onRestoreInstanceState")
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        Timber.d("onDestroy")
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        Timber.d("onConfigurationChanged: newConfig=%s", newConfig)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        Timber.v("onNewIntent")
+        setIntent(intent)
+        viewModel.appStart(intent)
+    }
+
+    fun changeDisplayMode(modeId: Int) {
+        lifecycleScope.launch(JvDispatchers.Main + ExceptionHandler(autoToast = true)) {
+            try {
+                val attrs = window.attributes
+                if (attrs.preferredDisplayModeId != modeId) {
+                    Timber.d("Switch preferredDisplayModeId to %s", modeId)
+                    window.attributes = attrs.apply { preferredDisplayModeId = modeId }
+                }
+            } catch (ex: Exception) {
+                Timber.e(ex, "Error switching preferredDisplayModeId to %s", modeId)
+                Toast
+                    .makeText(this@MainActivity, "Error changing display mode", Toast.LENGTH_SHORT)
+                    .show()
+            }
+        }
+    }
+
+    companion object {
+        private const val KEY_BACK_STACK = "backStack"
+        private const val KEY_EXTERNAL_PLAYER = "extPlayer"
+
+        lateinit var instance: MainActivity
+            private set
+    }
+}
+
+@HiltViewModel
+class MainActivityViewModel
+    @Inject
+    constructor(
+        @param:ApplicationContext private val context: Context,
+        private val preferences: DataStore<AppPreferences>,
+        val serverRepository: ServerRepository,
+        private val setupNavigationManager: SetupNavigationManager,
+        private val navigationManager: NavigationManager,
+        private val deviceProfileService: DeviceProfileService,
+        private val backdropService: BackdropService,
+        private val appUpgradeHandler: AppUpgradeHandler,
+        private val intentService: IntentService,
+    ) : ViewModel() {
+        private val mutex = Mutex()
+
+        fun appStart(intent: Intent?) {
+            viewModelScope.launchDefault {
+                mutex.withLock {
+                    try {
+                        val result = intent?.let { intentService.parseIntent(intent) }
+                        when (result) {
+                            is IntentResult.Error -> {
+                                val current = serverRepository.current.value
+                                val destination =
+                                    if (current != null) {
+                                        SetupDestination.UserList(current.server)
+                                    } else {
+                                        SetupDestination.ServerList
+                                    }
+                                setupNavigationManager.navigateTo(destination)
+                                Timber.e("Error parsing intent: %s", result.message)
+                                showToast(context, result.message)
+                                return@withLock
+                            }
+
+                            is IntentResult.Target -> {
+                                val current = serverRepository.current.value
+                                if (current != null) {
+                                    Timber.i("Received valid intent, switching to AppContent")
+
+                                    if (result.addHomeToBackStack) {
+                                        navigationManager.reloadHome()
+                                    } else {
+                                        navigationManager.backStack.clear()
+                                    }
+                                    navigationManager.backStack.addAll(result.destinations)
+
+                                    setupNavigationManager.navigateTo(
+                                        SetupDestination.AppContent(current),
+                                    )
+                                } else {
+                                    // This should never happen, but just reset app state if it does
+                                    setupNavigationManager.navigateTo(SetupDestination.ServerList)
+                                    Timber.e("Error parsing intent, no user is active")
+                                    showToast(context, "An error occurred parsing the intent")
+                                }
+                                return@withLock
+                            }
+
+                            IntentResult.NoOp,
+                            null,
+                            -> {
+                                // No-op, proceed below
+                            }
+                        }
+                    } catch (ex: Exception) {
+                        Timber.e(ex, "Error parsing intent")
+                    }
+
+                    try {
+                        val needUpgrade = appUpgradeHandler.needUpgrade()
+                        if (needUpgrade) {
+                            showToast(
+                                context,
+                                context.getString(
+                                    R.string.updated_toast,
+                                    appUpgradeHandler.currentVersion.toString(),
+                                ),
+                            )
+                            appUpgradeHandler.run()
+                        }
+                        appUpgradeHandler.copySubfont(false)
+                        val prefs =
+                            preferences.data.firstOrNull() ?: AppPreferences.getDefaultInstance()
+                        val profileProtected =
+                            serverRepository.current.value
+                                ?.user
+                                ?.isProtected == true
+                        if (prefs.signInAutomatically && !profileProtected) {
+                            val current =
+                                serverRepository.restoreSession(
+                                    prefs.currentServerId?.toUUIDOrNull(),
+                                    prefs.currentUserId?.toUUIDOrNull(),
+                                )
+                            if (current != null) {
+                                if (current.user.isProtected) {
+                                    setupNavigationManager.navigateTo(
+                                        SetupDestination.UserList(
+                                            current.server,
+                                        ),
+                                    )
+                                } else {
+                                    // Restored
+                                    setupNavigationManager.navigateTo(
+                                        SetupDestination.AppContent(
+                                            current,
+                                        ),
+                                    )
+                                }
+                            } else {
+                                // Did not restore
+                                setupNavigationManager.navigateTo(SetupDestination.ServerList)
+                            }
+                        } else {
+                            setupNavigationManager.navigateTo(SetupDestination.Loading)
+                            backdropService.clearBackdrop()
+                            val currentServerId = prefs.currentServerId?.toUUIDOrNull()
+                            if (currentServerId != null) {
+                                val currentServer =
+                                    serverRepository.serverDao.getServer(currentServerId)?.server
+                                if (currentServer != null) {
+                                    setupNavigationManager.navigateTo(
+                                        SetupDestination.UserList(
+                                            currentServer,
+                                        ),
+                                    )
+                                } else {
+                                    setupNavigationManager.navigateTo(SetupDestination.ServerList)
+                                }
+                            } else {
+                                setupNavigationManager.navigateTo(SetupDestination.ServerList)
+                            }
+                        }
+                    } catch (ex: Exception) {
+                        Timber.e(ex, "Error during appStart")
+                        setupNavigationManager.navigateTo(SetupDestination.ServerList)
+                    }
+                }
+            }
+            viewModelScope.launchDefault {
+                // Create the mediaCodecCapabilitiesTest if needed
+                deviceProfileService.mediaCodecCapabilitiesTest.supportsAVC()
+            }
+        }
+
+        fun appResume() {
+            viewModelScope.launchDefault {
+                mutex.withLock {
+                    try {
+                        Timber.v("Updating userDto")
+                        serverRepository.updateUserDto()
+                    } catch (ex: Exception) {
+                        Timber.w(ex, "Error during appResume")
+                    }
+                }
+            }
+        }
+    }
+
+private val Destination?.isPlayback: Boolean
+    get() =
+        this is Destination.Playback ||
+            this is Destination.PlaybackList ||
+            this is Destination.Slideshow

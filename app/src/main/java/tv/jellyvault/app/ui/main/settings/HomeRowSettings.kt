@@ -1,0 +1,464 @@
+package tv.jellyvault.app.ui.main.settings
+
+import android.view.Gravity
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.DialogWindowProvider
+import androidx.tv.material3.ListItem
+import androidx.tv.material3.Text
+import org.jellyfin.sdk.model.api.ItemSortBy
+import org.jellyfin.sdk.model.api.SortOrder
+import tv.jellyvault.app.R
+import tv.jellyvault.app.data.model.HomeRowConfig
+import tv.jellyvault.app.data.model.HomeRowViewOptions
+import tv.jellyvault.app.preferences.AppChoicePreference
+import tv.jellyvault.app.preferences.AppClickablePreference
+import tv.jellyvault.app.preferences.AppPreference
+import tv.jellyvault.app.preferences.AppSliderPreference
+import tv.jellyvault.app.preferences.AppSwitchPreference
+import tv.jellyvault.app.preferences.PrefContentScale
+import tv.jellyvault.app.ui.AspectRatio
+import tv.jellyvault.app.ui.Cards
+import tv.jellyvault.app.ui.FontAwesome
+import tv.jellyvault.app.ui.components.BasicDialog
+import tv.jellyvault.app.ui.components.ViewOptionImageType
+import tv.jellyvault.app.ui.components.toAnnotatedString
+import tv.jellyvault.app.ui.data.BoxSetSortOptions
+import tv.jellyvault.app.ui.data.SortAndDirection
+import tv.jellyvault.app.ui.data.getStringRes
+import tv.jellyvault.app.ui.ifElse
+import tv.jellyvault.app.ui.preferences.ClickPreference
+import tv.jellyvault.app.ui.preferences.ComposablePreference
+import tv.jellyvault.app.ui.preferences.PreferenceGroup
+import tv.jellyvault.app.ui.preferences.PreferenceTitle
+import tv.jellyvault.app.ui.tryRequestFocus
+
+@Composable
+fun HomeRowSettings(
+    title: String,
+    config: HomeRowConfig,
+    preferenceOptions: List<PreferenceGroup<HomeRowViewOptions>>,
+    viewOptions: HomeRowViewOptions,
+    onViewOptionsChange: (HomeRowViewOptions) -> Unit,
+    onConfigChange: (HomeRowConfig) -> Unit,
+    onConfigAction: (HomeRowConfigAction) -> Unit,
+    onApplyApplyAll: () -> Unit,
+    modifier: Modifier = Modifier,
+    defaultViewOptions: HomeRowViewOptions = HomeRowViewOptions(),
+) {
+    val firstFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { firstFocus.tryRequestFocus() }
+    Column(modifier = modifier) {
+        TitleText(title)
+        HomeSettingsLazyColumn {
+            preferenceOptions.forEachIndexed { groupIndex, prefGroup ->
+                if (preferenceOptions.size > 1) {
+                    item {
+                        SubTitleText(stringResource(prefGroup.title))
+                    }
+                }
+                itemsIndexed(prefGroup.preferences) { index, pref ->
+                    pref as AppPreference<HomeRowViewOptions, Any>
+                    val interactionSource = remember { MutableInteractionSource() }
+                    val value = pref.getter.invoke(viewOptions)
+                    ComposablePreference(
+                        preference = pref,
+                        value = value,
+                        onNavigate = {},
+                        onValueChange = { newValue ->
+                            onViewOptionsChange.invoke(pref.setter(viewOptions, newValue))
+                        },
+                        interactionSource = interactionSource,
+                        onClickPreference = { pref ->
+                            when (pref) {
+                                Options.ViewOptionsReset -> {
+                                    onViewOptionsChange.invoke(defaultViewOptions)
+                                }
+
+                                Options.ViewOptionsApplyAll -> {
+                                    onApplyApplyAll.invoke()
+                                }
+
+                                Options.ViewOptionsUseThumb -> {
+                                    onViewOptionsChange.invoke(
+                                        viewOptions.copy(
+                                            heightDp = Cards.HEIGHT_EPISODE,
+                                            spacing = 20,
+                                            imageType = ViewOptionImageType.THUMB,
+                                            aspectRatio = AspectRatio.WIDE,
+                                            contentScale = PrefContentScale.FIT,
+                                            episodeImageType = ViewOptionImageType.THUMB,
+                                            episodeAspectRatio = AspectRatio.WIDE,
+                                            episodeContentScale = PrefContentScale.FIT,
+                                        ),
+                                    )
+                                }
+                            }
+                        },
+                        modifier =
+                            Modifier
+                                .ifElse(
+                                    groupIndex == 0 && index == 0,
+                                    Modifier.focusRequester(firstFocus),
+                                ),
+                    )
+                }
+            }
+            addAdditionalConfig(
+                config = config,
+                onConfigChange = onConfigChange,
+                onConfigAction = onConfigAction,
+            )
+        }
+    }
+}
+
+private fun LazyListScope.addAdditionalConfig(
+    config: HomeRowConfig,
+    onConfigChange: (HomeRowConfig) -> Unit,
+    onConfigAction: (HomeRowConfigAction) -> Unit,
+) {
+    when (config) {
+        is HomeRowConfig.ContinueWatchingCombined -> {
+            item {
+                ClickPreference(
+                    title = stringResource(R.string.split_into_separate_rows),
+                    onClick = { onConfigAction.invoke(HomeRowConfigAction.Split) },
+                )
+            }
+        }
+
+        is HomeRowConfig.ContinueWatching,
+        is HomeRowConfig.NextUp,
+        -> {
+            item {
+                ClickPreference(
+                    title = stringResource(R.string.combine_continue_next),
+                    onClick = { onConfigAction.invoke(HomeRowConfigAction.Combine) },
+                )
+            }
+        }
+
+        is HomeRowConfig.ByParent -> {
+            item {
+                val sortAndDirection =
+                    remember(config) {
+                        config.sort ?: SortAndDirection(
+                            ItemSortBy.DEFAULT,
+                            SortOrder.ASCENDING,
+                        )
+                    }
+                var showDialog by remember { mutableStateOf(false) }
+                ListItem(
+                    selected = false,
+                    onClick = { showDialog = true },
+                    headlineContent = {
+                        PreferenceTitle(stringResource(R.string.sort))
+                    },
+                    supportingContent = {
+                        Text(
+                            text = sortAndDirection.toAnnotatedString(),
+                        )
+                    },
+                )
+                if (showDialog) {
+                    BasicDialog(
+                        onDismissRequest = { showDialog = false },
+                        properties = DialogProperties(usePlatformDefaultWidth = false),
+                        elevation = 5.dp,
+                    ) {
+                        val dialogWindowProvider = LocalView.current.parent as? DialogWindowProvider
+                        dialogWindowProvider?.window?.let { window ->
+                            window.setGravity(Gravity.START)
+                        }
+                        ByParentSortDialogContent(
+                            current = sortAndDirection,
+                            onClick = {
+                                val newSort =
+                                    if (config.sort?.sort == it) {
+                                        config.sort.flip()
+                                    } else if (it == ItemSortBy.DEFAULT) {
+                                        null
+                                    } else {
+                                        SortAndDirection(it, SortOrder.ASCENDING)
+                                    }
+                                onConfigChange.invoke(config.copy(sort = newSort))
+                                showDialog = false
+                            },
+                            modifier = Modifier.width(320.dp),
+                        )
+                    }
+                }
+            }
+        }
+
+        else -> {}
+    }
+}
+
+@Composable
+fun ByParentSortDialogContent(
+    current: SortAndDirection,
+    onClick: (ItemSortBy) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    LazyColumn(
+        contentPadding = PaddingValues(8.dp),
+        modifier = modifier,
+    ) {
+        items(BoxSetSortOptions) { sort ->
+            ListItem(
+                selected = sort == current.sort,
+                onClick = { onClick.invoke(sort) },
+                leadingContent = {
+                    Text(
+                        fontFamily = FontAwesome,
+                        text =
+                            if (sort == current.sort) {
+                                stringResource(
+                                    if (current.direction == SortOrder.ASCENDING) {
+                                        R.string.fa_caret_up
+                                    } else {
+                                        R.string.fa_caret_down
+                                    },
+                                )
+                            } else {
+                                ""
+                            },
+                    )
+                },
+                headlineContent = {
+                    Text(
+                        text = stringResource(getStringRes(sort)),
+                    )
+                },
+            )
+        }
+    }
+}
+
+internal object Options {
+    val ViewOptionsCardHeight =
+        AppSliderPreference<HomeRowViewOptions>(
+            title = R.string.height,
+            defaultValue = Cards.HEIGHT_2X3_DP.toLong(),
+            min = 64L,
+            max = Cards.HEIGHT_2X3_DP + 64L,
+            interval = 4,
+            getter = { it.heightDp.toLong() },
+            setter = { prefs, value -> prefs.copy(heightDp = value.toInt()) },
+        )
+    val ViewOptionsSpacing =
+        AppSliderPreference<HomeRowViewOptions>(
+            title = R.string.spacing,
+            defaultValue = 16,
+            min = 0,
+            max = 32,
+            interval = 2,
+            getter = { it.spacing.toLong() },
+            setter = { prefs, value -> prefs.copy(spacing = value.toInt()) },
+        )
+
+    val ViewOptionsContentScale =
+        AppChoicePreference<HomeRowViewOptions, PrefContentScale>(
+            title = R.string.global_content_scale,
+            defaultValue = PrefContentScale.FIT,
+            displayValues = R.array.content_scale,
+            getter = { it.contentScale },
+            setter = { viewOptions, value -> viewOptions.copy(contentScale = value) },
+            indexToValue = { PrefContentScale.forNumber(it) },
+            valueToIndex = { it.number },
+        )
+
+    val ViewOptionsAspectRatio =
+        AppChoicePreference<HomeRowViewOptions, AspectRatio>(
+            title = R.string.aspect_ratio,
+            defaultValue = AspectRatio.TALL,
+            displayValues = R.array.aspect_ratios,
+            getter = { it.aspectRatio },
+            setter = { viewOptions, value -> viewOptions.copy(aspectRatio = value) },
+            indexToValue = { AspectRatio.entries[it] },
+            valueToIndex = { it.ordinal },
+        )
+
+    val ViewOptionsShowTitles =
+        AppSwitchPreference<HomeRowViewOptions>(
+            title = R.string.show_titles,
+            defaultValue = true,
+            getter = { it.showTitles },
+            setter = { vo, value -> vo.copy(showTitles = value) },
+        )
+
+    val ViewOptionsUseSeries =
+        AppSwitchPreference<HomeRowViewOptions>(
+            title = R.string.use_series,
+            defaultValue = true,
+            getter = { it.useSeries },
+            setter = { vo, value -> vo.copy(useSeries = value) },
+        )
+
+    val ViewOptionsImageType =
+        AppChoicePreference<HomeRowViewOptions, ViewOptionImageType>(
+            title = R.string.image_type,
+            defaultValue = ViewOptionImageType.PRIMARY,
+            displayValues = R.array.image_types,
+            getter = { it.imageType },
+            setter = { viewOptions, value ->
+                val aspectRatio =
+                    when (value) {
+                        ViewOptionImageType.PRIMARY -> AspectRatio.TALL
+                        ViewOptionImageType.THUMB -> AspectRatio.WIDE
+                    }
+                viewOptions.copy(imageType = value, aspectRatio = aspectRatio)
+            },
+            indexToValue = { ViewOptionImageType.entries[it] },
+            valueToIndex = { it.ordinal },
+        )
+
+    val ViewOptionsApplyAll =
+        AppClickablePreference<HomeRowViewOptions>(
+            title = R.string.apply_all_rows,
+        )
+
+    val ViewOptionsReset =
+        AppClickablePreference<HomeRowViewOptions>(
+            title = R.string.reset,
+        )
+
+    val ViewOptionsUseThumb =
+        AppClickablePreference<HomeRowViewOptions>(
+            title = R.string.use_thumb_images,
+        )
+
+    val ViewOptionsEpisodeContentScale =
+        AppChoicePreference<HomeRowViewOptions, PrefContentScale>(
+            title = R.string.global_content_scale,
+            defaultValue = PrefContentScale.FIT,
+            displayValues = R.array.content_scale,
+            getter = { it.episodeContentScale },
+            setter = { viewOptions, value -> viewOptions.copy(episodeContentScale = value) },
+            indexToValue = { PrefContentScale.forNumber(it) },
+            valueToIndex = { it.number },
+        )
+
+    val ViewOptionsEpisodeAspectRatio =
+        AppChoicePreference<HomeRowViewOptions, AspectRatio>(
+            title = R.string.aspect_ratio,
+            defaultValue = AspectRatio.TALL,
+            displayValues = R.array.aspect_ratios,
+            getter = { it.episodeAspectRatio },
+            setter = { viewOptions, value -> viewOptions.copy(episodeAspectRatio = value) },
+            indexToValue = { AspectRatio.entries[it] },
+            valueToIndex = { it.ordinal },
+        )
+
+    val ViewOptionsEpisodeImageType =
+        AppChoicePreference<HomeRowViewOptions, ViewOptionImageType>(
+            title = R.string.image_type,
+            defaultValue = ViewOptionImageType.PRIMARY,
+            displayValues = R.array.image_types,
+            getter = { it.episodeImageType },
+            setter = { viewOptions, value ->
+                val aspectRatio =
+                    when (value) {
+                        ViewOptionImageType.PRIMARY -> AspectRatio.TALL
+                        ViewOptionImageType.THUMB -> AspectRatio.WIDE
+                    }
+                viewOptions.copy(episodeImageType = value, episodeAspectRatio = aspectRatio)
+            },
+            indexToValue = { ViewOptionImageType.entries[it] },
+            valueToIndex = { it.ordinal },
+        )
+
+    val OPTIONS =
+        listOf(
+            PreferenceGroup(
+                title = R.string.general,
+                preferences =
+                    listOf(
+                        ViewOptionsCardHeight,
+                        ViewOptionsSpacing,
+                        ViewOptionsShowTitles,
+                        ViewOptionsImageType,
+                        ViewOptionsAspectRatio,
+                        ViewOptionsContentScale,
+                        ViewOptionsUseSeries,
+                    ),
+            ),
+            PreferenceGroup(
+                title = R.string.more,
+                preferences =
+                    listOf(
+//                      ViewOptionsApplyAll,
+                        ViewOptionsUseThumb,
+                        ViewOptionsReset,
+                    ),
+            ),
+        )
+
+    val OPTIONS_EPISODES =
+        listOf(
+            PreferenceGroup(
+                title = R.string.general,
+                preferences =
+                    listOf(
+                        ViewOptionsCardHeight,
+                        ViewOptionsSpacing,
+                        ViewOptionsShowTitles,
+                        ViewOptionsImageType,
+                        ViewOptionsAspectRatio,
+                        ViewOptionsContentScale,
+                    ),
+            ),
+            PreferenceGroup(
+                title = R.string.for_episodes,
+                preferences =
+                    listOf(
+                        ViewOptionsUseSeries,
+                        ViewOptionsEpisodeImageType,
+                        ViewOptionsEpisodeAspectRatio,
+                        ViewOptionsEpisodeContentScale,
+                    ),
+            ),
+            PreferenceGroup(
+                title = R.string.more,
+                preferences =
+                    listOf(
+                        ViewOptionsUseThumb,
+                        ViewOptionsReset,
+                    ),
+            ),
+        )
+
+    val GENRE_OPTIONS =
+        listOf(
+            PreferenceGroup(
+                title = R.string.general,
+                preferences =
+                    listOf(
+                        ViewOptionsCardHeight,
+                        ViewOptionsSpacing,
+                        ViewOptionsReset,
+                    ),
+            ),
+        )
+}

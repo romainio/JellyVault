@@ -1,0 +1,628 @@
+package tv.jellyvault.app.ui.detail
+
+import android.view.KeyEvent
+import androidx.annotation.StringRes
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.gestures.BringIntoViewSpec
+import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.layout.LazyLayoutCacheWindow
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusRestorer
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.layout.onLayoutRectChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.tv.material3.Button
+import androidx.tv.material3.ButtonDefaults
+import androidx.tv.material3.LocalContentColor
+import androidx.tv.material3.MaterialTheme
+import androidx.tv.material3.Text
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import timber.log.Timber
+import tv.jellyvault.app.R
+import tv.jellyvault.app.ui.FontAwesome
+import tv.jellyvault.app.ui.ifElse
+import tv.jellyvault.app.ui.nav.BackdropGeometry
+import tv.jellyvault.app.ui.nav.DimBackdrop
+import tv.jellyvault.app.ui.playback.isBackwardButton
+import tv.jellyvault.app.ui.playback.isForwardButton
+import tv.jellyvault.app.ui.playback.isPlayKeyUp
+import tv.jellyvault.app.ui.theme.jv.JvShapes
+import tv.jellyvault.app.ui.tryRequestFocus
+import tv.jellyvault.app.util.ExceptionHandler
+import tv.jellyvault.app.util.JvDispatchers
+import kotlin.math.ceil
+
+private const val DEBUG = false
+
+interface CardGridItem {
+    val gridId: String
+    val playable: Boolean
+    val sortName: String
+}
+
+data class GridItemDetails<T : CardGridItem>(
+    val item: T?,
+    val index: Int,
+    val onClick: () -> Unit,
+    val onLongClick: () -> Unit,
+    val widthPx: Int,
+    val mod: Modifier,
+)
+
+/**
+ * Shows a vertical grid of [CardGridItem]s
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun <T : CardGridItem> CardGrid(
+    pager: List<T?>,
+    onClickItem: (Int, T) -> Unit,
+    onLongClickItem: (Int, T) -> Unit,
+    onClickPlay: (Int, T) -> Unit,
+    letterPosition: suspend (Char) -> Int,
+    gridFocusRequester: FocusRequester,
+    showJumpButtons: Boolean,
+    showLetterButtons: Boolean,
+    modifier: Modifier = Modifier,
+    initialPosition: Int = 0,
+    positionCallback: ((columns: Int, position: Int) -> Unit)? = null,
+    cardContent: @Composable (GridItemDetails<T>) -> Unit,
+    columns: Int = 6,
+    spacing: Dp = 16.dp,
+    bringIntoViewSpec: BringIntoViewSpec = LocalBringIntoViewSpec.current,
+) {
+    DimBackdrop(BackdropGeometry.DIM_GRID)
+    val startPosition =
+        remember(initialPosition, pager.size) {
+            initialPosition.coerceIn(0, (pager.size - 1).coerceAtLeast(0))
+        }
+
+    var focusedIndex by rememberSaveable { mutableIntStateOf(startPosition) }
+    val currentFocusedIndex by rememberUpdatedState(focusedIndex)
+    val gridState =
+        rememberLazyGridState(
+            cacheWindow = LazyLayoutCacheWindow(aheadFraction = 2f, behindFraction = 0.5f),
+            initialFirstVisibleItemIndex = focusedIndex,
+        )
+    val scope = rememberCoroutineScope()
+    val firstFocus = remember { FocusRequester() }
+    val zeroFocus = remember { FocusRequester() }
+    var previouslyFocusedIndex by rememberSaveable { mutableIntStateOf(0) }
+
+    var alphabetFocus by remember { mutableStateOf(false) }
+    val focusOn =
+        remember {
+            { index: Int ->
+                if (DEBUG) Timber.v("focusOn: focusedIndex=$currentFocusedIndex, index=$index")
+                if (index != currentFocusedIndex) {
+                    previouslyFocusedIndex = currentFocusedIndex
+                }
+                focusedIndex = index
+            }
+        }
+
+    // Wait for a recomposition to focus
+    val alphabetFocusRequester = remember { FocusRequester() }
+    LaunchedEffect(alphabetFocus) {
+        if (alphabetFocus) {
+            alphabetFocusRequester.tryRequestFocus()
+        }
+        alphabetFocus = false
+    }
+
+    val useBackToJump = true // uiConfig.preferences.interfacePreferences.scrollTopOnBack
+    val showFooter = true // uiConfig.preferences.interfacePreferences.showPositionFooter
+    val useJumpRemoteButtons = true // uiConfig.preferences.interfacePreferences.pageWithRemoteButtons
+    val jump2 =
+        remember {
+            if (pager.size >= 25_000) {
+                columns * 2000
+            } else if (pager.size >= 7_000) {
+                columns * 200
+            } else if (pager.size >= 2_000) {
+                columns * 50
+            } else {
+                columns * 20
+            }
+        }
+    val jump1 =
+        remember {
+            if (pager.size >= 25_000) {
+                columns * 500
+            } else if (pager.size >= 7_000) {
+                columns * 50
+            } else if (pager.size >= 2_000) {
+                columns * 15
+            } else {
+                columns * 6
+            }
+        }
+
+    val jump =
+        remember {
+            { jump: Int ->
+                scope.launch(ExceptionHandler()) {
+                    val newPosition =
+                        (gridState.firstVisibleItemIndex + jump).coerceIn(0..<pager.size)
+                    if (DEBUG) Timber.d("newPosition=$newPosition")
+                    focusOn(newPosition)
+                    gridState.scrollToItem(newPosition, 0)
+                }
+            }
+        }
+    val jumpToTop =
+        remember {
+            {
+                scope.launch(ExceptionHandler()) {
+                    if (currentFocusedIndex < (columns * 6)) {
+                        // If close, animate the scroll
+                        gridState.animateScrollToItem(0, 0)
+                    } else {
+                        gridState.scrollToItem(0, 0)
+                    }
+                    focusOn(0)
+                    zeroFocus.tryRequestFocus()
+                }
+            }
+        }
+
+    val jumpToLetter: (Char) -> Unit =
+        remember {
+            { letter: Char ->
+                scope.launch(ExceptionHandler()) {
+                    val jumpPosition =
+                        withContext(JvDispatchers.IO) {
+                            letterPosition.invoke(letter)
+                        }
+                    Timber.d("Alphabet jump to $jumpPosition")
+                    if (jumpPosition >= 0) {
+                        pager.getOrNull(jumpPosition)
+                        gridState.scrollToItem(jumpPosition)
+                        focusOn(jumpPosition)
+                        alphabetFocus = true
+                    }
+                }
+            }
+        }
+
+    if (pager.isEmpty()) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = modifier.fillMaxSize(),
+        ) {
+            Text(
+                text = stringResource(R.string.no_results),
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                textAlign = TextAlign.Center,
+            )
+        }
+    } else {
+        var longPressing by remember { mutableStateOf(false) }
+        Row(
+//        horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier =
+                modifier
+                    .fillMaxSize()
+                    .onKeyEvent {
+                        if (DEBUG) Timber.d("onKeyEvent: ${it.nativeKeyEvent}")
+                        if (useBackToJump && it.key == Key.Back && it.nativeKeyEvent.isLongPress) {
+                            longPressing = true
+                            val newPosition = previouslyFocusedIndex
+                            if (DEBUG) Timber.d("Back long pressed: newPosition=$newPosition")
+                            if (newPosition > 0) {
+                                scope.launch(ExceptionHandler()) {
+                                    pager.getOrNull(newPosition)
+                                    gridState.scrollToItem(newPosition)
+                                    focusOn(newPosition)
+                                    alphabetFocus = true
+                                }
+                            }
+                            return@onKeyEvent true
+                        } else if (it.type == KeyEventType.KeyUp) {
+                            if (longPressing && it.key == Key.Back) {
+                                longPressing = false
+                                return@onKeyEvent true
+                            }
+                            longPressing = false
+                        }
+                        if (it.type != KeyEventType.KeyUp) {
+                            return@onKeyEvent false
+                        } else if (useBackToJump && it.key == Key.Back && focusedIndex > 0) {
+                            jumpToTop()
+                            return@onKeyEvent true
+                        } else if (isPlayKeyUp(it)) {
+                            val item = pager.getOrNull(focusedIndex)
+                            if (item?.playable == true) {
+                                Timber.v("Clicked play on ${item.gridId}")
+                                onClickPlay.invoke(focusedIndex, item)
+                            }
+                            return@onKeyEvent true
+                        } else if (useJumpRemoteButtons && isForwardButton(it)) {
+                            jump(jump1)
+                            return@onKeyEvent true
+                        } else if (useJumpRemoteButtons && isBackwardButton(it)) {
+                            jump(-jump1)
+                            return@onKeyEvent true
+                        } else if (showLetterButtons && pager.isNotEmpty() &&
+                            it.nativeKeyEvent.keyCode in (KeyEvent.KEYCODE_A..KeyEvent.KEYCODE_Z)
+                        ) {
+                            val letter = it.nativeKeyEvent.unicodeChar.toChar()
+                            jumpToLetter.invoke(letter)
+                            return@onKeyEvent true
+                        } else {
+                            return@onKeyEvent false
+                        }
+                    },
+        ) {
+            if (showJumpButtons && pager.isNotEmpty()) {
+                JumpButtons(
+                    jump1 = jump1,
+                    jump2 = jump2,
+                    jumpClick = { jump(it) },
+                    modifier = Modifier.align(Alignment.CenterVertically),
+                )
+            }
+            val density = LocalDensity.current
+            var cardWidthPx by rememberSaveable { mutableIntStateOf(0) }
+
+            Box(
+                modifier = Modifier.weight(1f),
+            ) {
+                CompositionLocalProvider(LocalBringIntoViewSpec provides bringIntoViewSpec) {
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(columns),
+                        horizontalArrangement = Arrangement.spacedBy(spacing),
+                        verticalArrangement = Arrangement.spacedBy(spacing),
+                        state = gridState,
+                        contentPadding = PaddingValues(vertical = 16.dp),
+                        modifier =
+                            Modifier
+                                .fillMaxSize()
+                                .focusGroup()
+                                .focusRestorer(firstFocus)
+                                .focusProperties {
+                                    onEnter = {
+                                        if (focusedIndex < 0 && gridState.firstVisibleItemIndex <= startPosition) {
+                                            focusedIndex = startPosition
+                                        }
+                                    }
+                                }.onLayoutRectChanged(0, 0) {
+                                    val width = it.width
+                                    val spacingPx = with(density) { spacing.toPx() }
+                                    val cardWidth =
+                                        ceil((width - (spacingPx * (columns - 1))) / columns)
+                                    cardWidthPx = cardWidth.toInt()
+//                                    Timber.v("cardWidthPx=%s", cardWidthPx)
+                                },
+                    ) {
+                        items(pager.size) { index ->
+                            val item = pager[index]
+                            val details =
+                                remember(index, item, cardWidthPx, columns) {
+                                    val mod =
+                                        if ((index == currentFocusedIndex) or (currentFocusedIndex < 0 && index == 0)) {
+                                            if (DEBUG) Timber.d("Adding firstFocus to focusedIndex $index")
+                                            Modifier
+                                                .focusRequester(firstFocus)
+                                                .focusRequester(gridFocusRequester)
+                                                .focusRequester(alphabetFocusRequester)
+                                        } else {
+                                            Modifier
+                                        }
+                                    GridItemDetails(
+                                        item = item,
+                                        index = index,
+                                        onClick = {
+                                            if (item != null) {
+                                                focusedIndex = index
+                                                onClickItem.invoke(index, item)
+                                            }
+                                        },
+                                        onLongClick = {
+                                            if (item != null) {
+                                                onLongClickItem.invoke(index, item)
+                                            }
+                                        },
+                                        widthPx = cardWidthPx,
+                                        mod =
+                                            mod
+                                                .ifElse(
+                                                    index == 0,
+                                                    Modifier.focusRequester(zeroFocus),
+                                                ).onFocusChanged { focusState ->
+                                                    if (DEBUG) {
+                                                        Timber.v(
+                                                            "$index isFocused=${focusState.isFocused}",
+                                                        )
+                                                    }
+                                                    if (focusState.isFocused) {
+                                                        // Focused, so set that up
+                                                        focusOn(index)
+                                                        positionCallback?.invoke(columns, index)
+                                                    }
+                                                },
+                                    )
+                                }
+                            cardContent.invoke(details)
+                        }
+                    }
+                    if (pager.isEmpty()) {
+//                focusedIndex = -1
+                        Box(modifier = Modifier.fillMaxSize()) {
+                            Text(
+                                text = stringResource(R.string.no_results),
+                                color = MaterialTheme.colorScheme.onBackground,
+                                modifier = Modifier.align(Alignment.Center),
+                            )
+                        }
+                    }
+                    if (showFooter) {
+                        // Footer
+                        // Small badge in the corner: centered, it sat on top of the posters
+                        Box(
+                            modifier =
+                                Modifier
+                                    .align(Alignment.BottomEnd)
+                                    .padding(end = 16.dp, bottom = 12.dp)
+                                    .background(MaterialTheme.colorScheme.background.copy(alpha = 0.85f), JvShapes.Button),
+                        ) {
+                            val index = (focusedIndex + 1).takeIf { it > 0 } ?: "?"
+//                        if (focusedIndex >= 0) {
+//                            focusedIndex + 1
+//                        } else {
+//                            max(savedFocusedIndex, focusedIndexOnExit) + 1
+//                        }
+                            Text(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = MaterialTheme.typography.labelMedium,
+                                text = "$index / ${pager.size}",
+                            )
+                        }
+                    }
+                }
+            }
+            val letters = stringResource(R.string.jump_letters)
+            // Letters
+            val currentLetter =
+                remember(focusedIndex) {
+                    pager
+                        .getOrNull(focusedIndex)
+                        ?.sortName
+                        ?.firstOrNull()
+                        ?.uppercaseChar()
+                        ?.let {
+                            when (it) {
+                                in '0'..'9' -> '#'
+                                in 'A'..'Z' -> it
+                                else -> null
+                            }
+                        }
+                        ?: letters[0]
+                }
+            if (showLetterButtons && pager.isNotEmpty()) {
+                AlphabetButtons(
+                    letters = letters,
+                    currentLetter = currentLetter,
+                    modifier =
+                        Modifier
+                            .align(Alignment.CenterVertically)
+                            .padding(start = 16.dp),
+                    // Add end padding to push away from edge
+                    letterClicked = jumpToLetter,
+                )
+            } else {
+                // Spacer ensures card sizes do not change if the alphabet buttons are not shown
+                Spacer(
+                    Modifier
+                        .padding(start = 16.dp)
+                        .width(letterHorizontalPadding * 2 + letterButtonSize),
+                )
+            }
+        }
+    }
+}
+
+private val letterHorizontalPadding = 2.dp
+private val letterButtonSize = 14.dp
+
+@Composable
+fun JumpButtons(
+    jump1: Int,
+    jump2: Int,
+    jumpClick: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier,
+    ) {
+        JumpButton(R.string.fa_angles_up, -jump2, jumpClick)
+        JumpButton(R.string.fa_angle_up, -jump1, jumpClick)
+        JumpButton(R.string.fa_angle_down, jump1, jumpClick)
+        JumpButton(R.string.fa_angles_down, jump2, jumpClick)
+    }
+}
+
+@Composable
+fun JumpButton(
+    @StringRes stringRes: Int,
+    jumpAmount: Int,
+    jumpClick: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Button(
+        modifier = modifier.width(40.dp),
+        contentPadding = PaddingValues(4.dp),
+        onClick = {
+            jumpClick.invoke(jumpAmount)
+        },
+    ) {
+        Text(text = stringResource(stringRes), fontFamily = FontAwesome)
+    }
+}
+
+@Composable
+fun AlphabetButtons(
+    letters: String,
+    currentLetter: Char,
+    letterClicked: (Char) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val scope = rememberCoroutineScope()
+    val listState = rememberLazyListState()
+
+    val index = remember(letters, currentLetter) { letters.indexOf(currentLetter) }
+    LaunchedEffect(currentLetter) {
+        scope.launch(ExceptionHandler()) {
+            val firstVisibleItemIndex = listState.firstVisibleItemIndex
+            val lastVisibleItemIndex =
+                listState.layoutInfo.visibleItemsInfo
+                    .lastOrNull()
+                    ?.index ?: -1
+            if (index >= 0 && index !in firstVisibleItemIndex..lastVisibleItemIndex) {
+                listState.animateScrollToItem(index)
+            }
+        }
+    }
+    // Focus & interaction states for each letter button
+    val focusRequesters = remember { List(letters.length) { FocusRequester() } }
+    val interactionSources = remember { List(letters.length) { MutableInteractionSource() } }
+
+    // Track if the entire alphabet picker component has focus
+    var alphabetPickerFocused by remember { mutableStateOf(false) }
+
+    LazyColumn(
+        contentPadding = PaddingValues(vertical = 1.1.dp, horizontal = letterHorizontalPadding),
+        verticalArrangement = Arrangement.spacedBy(1.1.dp),
+        state = listState,
+        modifier =
+            modifier
+                .onFocusChanged { focusState ->
+                    alphabetPickerFocused = focusState.hasFocus
+                }.focusProperties {
+                    onEnter = {
+                        focusRequesters[index.coerceIn(0, letters.length - 1)].tryRequestFocus()
+                    }
+                },
+    ) {
+        items(
+            letters.length,
+            key = { letters[it] },
+        ) { index ->
+            val interactionSource = interactionSources[index]
+            val focused by interactionSource.collectIsFocusedAsState()
+
+            val isCurrentLetter = letters[index] == currentLetter
+            // Apply alpha to individual items, but keep selected letter fully visible when picker is unfocused
+            val itemAlpha =
+                when {
+                    isCurrentLetter && !alphabetPickerFocused -> 1f
+                    alphabetPickerFocused -> .85f
+                    else -> .25f
+                }
+
+            // Only show a background for the current letter (or when focused)
+            // Wrap in Box with clipping to prevent focus indicator from overflowing
+            Box(
+                modifier =
+                    Modifier
+                        .size(letterButtonSize)
+                        .clip(JvShapes.Button)
+                        .alpha(itemAlpha),
+            ) {
+                Button(
+                    modifier =
+                        Modifier
+                            .size(letterButtonSize)
+                            .focusRequester(focusRequesters[index]),
+                    contentPadding = PaddingValues(0.dp), // No padding to maximize text space
+                    shape = ButtonDefaults.shape(JvShapes.Button),
+                    interactionSource = interactionSource,
+                    onClick = {
+                        letterClicked.invoke(letters[index])
+                    },
+                    colors =
+                        if (isCurrentLetter || focused) {
+                            // Use default button colors for current letter or focused
+                            ButtonDefaults.colors()
+                        } else {
+                            // Transparent background for non-current letters (no circle)
+                            ButtonDefaults.colors(
+                                containerColor = Color.Transparent,
+                                contentColor = MaterialTheme.colorScheme.onSurface,
+                                focusedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                focusedContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                            )
+                        },
+                ) {
+                    // Use border color for selected letter when focused, tertiary for unfocused-selected
+                    val color =
+                        when {
+                            // Focused: the container turns white, so take its (dark) content color
+                            focused -> LocalContentColor.current
+
+                            isCurrentLetter -> MaterialTheme.colorScheme.tertiary
+
+                            else -> MaterialTheme.colorScheme.onSurface
+                        }
+                    Text(
+                        text = letters[index].toString(),
+                        color = color,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth(),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+        }
+    }
+}

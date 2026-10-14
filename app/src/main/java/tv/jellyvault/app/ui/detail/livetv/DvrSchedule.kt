@@ -1,0 +1,360 @@
+package tv.jellyvault.app.ui.detail.livetv
+
+import android.text.format.DateUtils
+import android.widget.Toast
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import androidx.tv.material3.ListItem
+import androidx.tv.material3.ListItemDefaults
+import androidx.tv.material3.MaterialTheme
+import androidx.tv.material3.Text
+import androidx.tv.material3.surfaceColorAtElevation
+import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.update
+import org.jellyfin.sdk.api.client.ApiClient
+import org.jellyfin.sdk.api.client.extensions.liveTvApi
+import timber.log.Timber
+import tv.jellyvault.app.R
+import tv.jellyvault.app.data.model.BaseItem
+import tv.jellyvault.app.services.NavigationManager
+import tv.jellyvault.app.ui.SlimItemFields
+import tv.jellyvault.app.ui.components.ErrorMessage
+import tv.jellyvault.app.ui.components.LoadingPage
+import tv.jellyvault.app.ui.launchIO
+import tv.jellyvault.app.ui.nav.Destination
+import tv.jellyvault.app.ui.seasonEpisode
+import tv.jellyvault.app.ui.tryRequestFocus
+import tv.jellyvault.app.util.DataLoadingState
+import tv.jellyvault.app.util.ExceptionHandler
+import tv.jellyvault.app.util.LoadingState
+import java.time.LocalDate
+import java.time.OffsetDateTime
+import java.time.ZoneId
+import javax.inject.Inject
+
+@HiltViewModel
+class DvrScheduleViewModel
+    @Inject
+    constructor(
+        private val api: ApiClient,
+        val navigationManager: NavigationManager,
+    ) : ViewModel() {
+        private val _state = MutableStateFlow(DvrScheduleState())
+        val state: StateFlow<DvrScheduleState> = _state
+
+        init {
+            init()
+        }
+
+        fun init() {
+            viewModelScope.launchIO {
+                try {
+                    val active =
+                        api.liveTvApi
+                            .getRecordings(
+                                isInProgress = true,
+                                fields = SlimItemFields,
+                                limit = 100,
+                            ).content.items
+                            .map { BaseItem.from(it, api, true) }
+                    val scheduled =
+                        api.liveTvApi
+                            .getTimers(
+                                isActive = false,
+                                isScheduled = true,
+                            ).content.items
+                            .map {
+                                BaseItem.from(
+                                    it.programInfo!!,
+                                    api,
+                                    true,
+                                )
+                            } // TODO this probably breaks for time based recordings
+                            .groupBy {
+                                it.data.startDate!!.toLocalDate()
+                            }
+
+                    _state.update {
+                        it.copy(
+                            loading = LoadingState.Success,
+                            active = active,
+                            scheduled = scheduled,
+                        )
+                    }
+                } catch (ex: Exception) {
+                    Timber.e(ex, "Error fetching DVR schedule")
+                    _state.update { it.copy(loading = LoadingState.Error(ex)) }
+                }
+            }
+        }
+
+        fun cancelRecording(
+            timerId: String,
+            series: Boolean,
+        ) {
+            viewModelScope.launchIO(ExceptionHandler(autoToast = true)) {
+                if (series) {
+                    api.liveTvApi.cancelSeriesTimer(timerId)
+                } else {
+                    api.liveTvApi.cancelTimer(timerId)
+                }
+                init()
+            }
+        }
+    }
+
+data class DvrScheduleState(
+    val loading: LoadingState = LoadingState.Loading,
+    val active: List<BaseItem> = emptyList(),
+    val scheduled: Map<LocalDate, List<BaseItem>> = emptyMap(),
+)
+
+@Composable
+fun DvrSchedule(
+    requestFocusAfterLoading: Boolean,
+    focusRequesterOnEmpty: FocusRequester,
+    modifier: Modifier = Modifier,
+    viewModel: DvrScheduleViewModel = hiltViewModel(),
+) {
+    LaunchedEffect(Unit) {
+        viewModel.init()
+    }
+    val state by viewModel.state.collectAsState()
+    when (val st = state.loading) {
+        is LoadingState.Error -> {
+            ErrorMessage(st, modifier)
+        }
+
+        LoadingState.Loading,
+        LoadingState.Pending,
+        -> {
+            LoadingPage(modifier)
+        }
+
+        LoadingState.Success -> {
+            var showDialog by remember { mutableStateOf<BaseItem?>(null) }
+            val focusRequester = remember { FocusRequester() }
+            if (requestFocusAfterLoading) {
+                LaunchedEffect(Unit) {
+                    if (state.active.isNotEmpty() || state.scheduled.isNotEmpty()) {
+                        focusRequester.tryRequestFocus()
+                    } else {
+                        focusRequesterOnEmpty.tryRequestFocus()
+                    }
+                }
+            }
+            DvrScheduleContent(
+                activeRecordings = state.active,
+                scheduledRecordings = state.scheduled,
+                onClickItem = {
+                    showDialog = it
+                },
+                modifier =
+                    modifier
+                        .focusRequester(focusRequester),
+            )
+            showDialog?.let { item ->
+                val context = LocalContext.current
+                ProgramDialog(
+                    state = DataLoadingState.Success(item),
+                    canRecord = true,
+                    onDismissRequest = {
+                        showDialog = null
+                    },
+                    onWatch = { program ->
+                        val channelId = program.data.channelId
+                        if (channelId != null) {
+                            viewModel.navigationManager.navigateTo(
+                                Destination.Playback(
+                                    itemId = channelId,
+                                    positionMs = 0L,
+                                ),
+                            )
+                        } else {
+                            Toast
+                                .makeText(context, "Program has no channel ID", Toast.LENGTH_LONG)
+                                .show()
+                        }
+                    },
+                    onRecord = { _, _ ->
+                        // no-op
+                    },
+                    onCancelRecord = { program, series ->
+                        showDialog = null
+                        val timerId =
+                            if (series) program.data.seriesTimerId else program.data.timerId
+                        if (timerId != null) {
+                            viewModel.cancelRecording(timerId, series)
+                        }
+                    },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun DvrScheduleContent(
+    activeRecordings: List<BaseItem>,
+    scheduledRecordings: Map<LocalDate, List<BaseItem>>,
+    onClickItem: (BaseItem) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val context = LocalContext.current
+    Box(
+        contentAlignment = Alignment.TopCenter,
+        modifier = modifier,
+    ) {
+        LazyColumn(
+            contentPadding = PaddingValues(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth(.6f)
+                    .background(MaterialTheme.colorScheme.surface),
+        ) {
+            if (activeRecordings.isEmpty() && scheduledRecordings.isEmpty()) {
+                item {
+                    Text(
+                        text = stringResource(R.string.no_scheduled_recordings),
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            }
+            if (activeRecordings.isNotEmpty()) {
+                item {
+                    Text(
+                        text = stringResource(R.string.active_recordings),
+                        style = MaterialTheme.typography.headlineMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+                items(activeRecordings) { item ->
+                    Recording(
+                        item = item,
+                        onClick = { onClickItem.invoke(item) },
+                        modifier = Modifier,
+                    )
+                }
+            }
+            scheduledRecordings.keys.sorted().forEach { date ->
+                val formattedDate =
+                    DateUtils.formatDateTime(
+                        context,
+                        date
+                            .atStartOfDay(ZoneId.systemDefault())
+                            .toInstant()
+                            .epochSecond * 1000,
+                        DateUtils.FORMAT_SHOW_WEEKDAY or DateUtils.FORMAT_SHOW_DATE,
+                    )
+                item {
+                    Text(
+                        text = formattedDate,
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+                val programs = scheduledRecordings[date].orEmpty()
+                items(programs) { item ->
+                    Recording(
+                        item = item,
+                        onClick = { onClickItem.invoke(item) },
+                        modifier = Modifier,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun Recording(
+    item: BaseItem,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val context = LocalContext.current
+    ListItem(
+        selected = false,
+        onClick = onClick,
+        modifier = modifier,
+        colors =
+            ListItemDefaults.colors(
+                containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(1.dp),
+            ),
+        leadingContent = {
+            // TODO
+//                        AsyncImage(
+//                            model = item.imageUrl,
+//                            contentDescription = null,
+//                        )
+        },
+        headlineContent = {
+            Text(
+                text = item.title ?: "",
+            )
+        },
+        supportingContent = {
+            if (item.data.isSeries ?: false) {
+                listOfNotNull(
+                    item.data.seasonEpisode,
+                    item.data.episodeTitle,
+                ).joinToString(" - ")
+                    .ifBlank { null }
+                    ?.let {
+                        Text(
+                            text = it,
+                            modifier = Modifier,
+                        )
+                    }
+            }
+        },
+        trailingContent = {
+            val time =
+                DateUtils.formatDateRange(
+                    context,
+                    item.data.startDate!!
+                        .toInstant(OffsetDateTime.now().offset)
+                        .epochSecond * 1000,
+                    item.data.endDate!!
+                        .toInstant(OffsetDateTime.now().offset)
+                        .epochSecond * 1000,
+                    DateUtils.FORMAT_SHOW_TIME,
+                )
+            Text(
+                text = time,
+            )
+        },
+    )
+}

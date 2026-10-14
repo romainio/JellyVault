@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+option java_package = "tv.jellyvault.app.catalog.arr";
+option java_multiple_files = true;
+
+message ArrServiceSettings {
+  string url = 1;
+  string api_key = 2;
+  string basic_user = 3;
+  string basic_password = 4;
+  int32 quality_profile_id = 5;
+  string root_folder_path = 6;
+}
+
+message ArrSettings {
+  ArrServiceSettings radarr = 1;
+  ArrServiceSettings sonarr = 2;
+}

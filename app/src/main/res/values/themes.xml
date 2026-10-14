@@ -1,0 +1,8 @@
+<resources>
+
+    <style name="Theme.JellyVault" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="android:colorBackground">@android:color/background_dark</item>
+        <!-- JellyVault: black before the first frame, like the intro -->
+        <item name="android:windowBackground">@android:color/black</item>
+    </style>
+</resources>

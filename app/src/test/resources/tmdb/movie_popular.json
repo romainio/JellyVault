@@ -1,0 +1,4 @@
+{"page": 2, "total_pages": 40, "results": [
+  {"id": 1, "title": "Film A", "poster_path": "/a.jpg", "release_date": "2026-01-01", "genre_ids": [28]},
+  {"id": 2, "title": "Film B", "poster_path": "/b.jpg", "release_date": "2025-01-01", "genre_ids": [35]}
+]}

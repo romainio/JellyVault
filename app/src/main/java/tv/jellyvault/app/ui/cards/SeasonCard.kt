@@ -1,0 +1,263 @@
+package tv.jellyvault.app.ui.cards
+
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.isSpecified
+import androidx.tv.material3.Card
+import androidx.tv.material3.CardDefaults
+import androidx.tv.material3.MaterialTheme
+import androidx.tv.material3.Text
+import kotlinx.coroutines.delay
+import org.jellyfin.sdk.model.api.ImageType
+import tv.jellyvault.app.data.model.BaseItem
+import tv.jellyvault.app.ui.AspectRatios
+import tv.jellyvault.app.ui.LocalImageUrlService
+import tv.jellyvault.app.ui.enableMarquee
+import tv.jellyvault.app.ui.theme.jv.JvCardDefaults
+
+/**
+ * A Card for a TV Show Season, but can generally show most items
+ */
+@Composable
+fun SeasonCard(
+    item: BaseItem?,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    imageHeight: Dp,
+    modifier: Modifier = Modifier,
+    imageWidth: Dp = Dp.Unspecified,
+    interactionSource: MutableInteractionSource = remember { MutableInteractionSource() },
+    showImageOverlay: Boolean = false,
+    aspectRatio: Float = item?.aspectRatio ?: AspectRatios.TALL,
+) {
+    val imageUrl = rememberImageUrl(item, imageHeight, imageWidth)
+    SeasonCard(
+        title = item?.title,
+        subtitle = item?.subtitle,
+        name = item?.name,
+        imageUrl = imageUrl,
+        isFavorite = item?.data?.userData?.isFavorite ?: false,
+        isPlayed = item?.seen ?: false,
+        inLibrary = item?.showLibraryCheck == true,
+        unplayedItemCount = item?.data?.userData?.unplayedItemCount ?: 0,
+        playedPercentage = item?.data?.userData?.playedPercentage ?: 0.0,
+        numberOfVersions = item?.data?.mediaSourceCount ?: 0,
+        onClick = onClick,
+        onLongClick = onLongClick,
+        modifier = modifier,
+        imageHeight = imageHeight,
+        imageWidth = imageWidth,
+        interactionSource = interactionSource,
+        showImageOverlay = showImageOverlay,
+        aspectRatio = aspectRatio,
+    )
+}
+
+@Composable
+fun rememberImageUrl(
+    item: BaseItem?,
+    imageHeight: Dp,
+    imageWidth: Dp = Dp.Unspecified,
+): String? {
+    val density = LocalDensity.current
+    val imageUrlService = LocalImageUrlService.current
+    return remember(item, imageHeight, imageWidth, density) {
+        // TMDB-only titles carry their own image and must never be looked up on the Jellyfin server
+        if (item?.imageUrlOverride != null) {
+            item.imageUrlOverride
+        } else if (item != null) {
+            val fillHeight =
+                if (imageHeight.isSpecified) {
+                    with(density) {
+                        imageHeight.roundToPx()
+                    }
+                } else {
+                    null
+                }
+            val fillWidth =
+                if (imageWidth.isSpecified) {
+                    with(density) {
+                        imageWidth.roundToPx()
+                    }
+                } else {
+                    null
+                }
+            imageUrlService.getItemImageUrl(
+                item,
+                ImageType.PRIMARY,
+                fillWidth = fillWidth,
+                fillHeight = fillHeight,
+            )
+        } else {
+            null
+        }
+    }
+}
+
+private val spaceBetweenFocused = 4.dp
+private val spaceBetweenUnfocused = 12.dp
+
+/**
+ * A Card for a TV Show Season, but can generically show most items
+ */
+@Composable
+fun SeasonCard(
+    title: String?,
+    subtitle: String?,
+    name: String?,
+    imageUrl: String?,
+    isFavorite: Boolean,
+    isPlayed: Boolean,
+    unplayedItemCount: Int,
+    playedPercentage: Double,
+    numberOfVersions: Int,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    imageHeight: Dp = Dp.Unspecified,
+    imageWidth: Dp = Dp.Unspecified,
+    interactionSource: MutableInteractionSource = remember { MutableInteractionSource() },
+    showImageOverlay: Boolean = false,
+    aspectRatio: Float = AspectRatios.TALL,
+    inLibrary: Boolean = false,
+) {
+    val focused by interactionSource.collectIsFocusedAsState()
+    // Do not use `by` here, this way we are Defer reads and recompositions to only when modifier calculates
+    val spaceBetween =
+        animateDpAsState(
+            if (focused) spaceBetweenFocused else spaceBetweenUnfocused,
+            label = "spaceBetween",
+        )
+
+    val focusedAfterDelay by rememberFocusedAfterDelay(interactionSource)
+    val aspectRationToUse = aspectRatio.coerceAtLeast(AspectRatios.MIN)
+    val width = imageHeight * aspectRationToUse
+    val height = imageWidth * (1f / aspectRationToUse)
+
+    Column(
+        verticalArrangement = Arrangement.spacedBy(4.dp), // Fixed base spacing
+        modifier = modifier.size(width, height),
+    ) {
+        Card(
+            modifier =
+                Modifier
+                    .size(imageWidth, imageHeight)
+                    .aspectRatio(aspectRationToUse),
+            onClick = onClick,
+            onLongClick = onLongClick,
+            interactionSource = interactionSource,
+            scale = JvCardDefaults.scale(),
+            border = JvCardDefaults.border(),
+            glow = JvCardDefaults.glow(),
+            shape = JvCardDefaults.shape(),
+            colors =
+                CardDefaults.colors(
+                    containerColor = Color.Transparent,
+                ),
+        ) {
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxSize(),
+            ) {
+                ItemCardImage(
+                    imageUrl = imageUrl,
+                    name = name,
+                    showOverlay = showImageOverlay,
+                    favorite = isFavorite,
+                    watched = isPlayed,
+                    inLibrary = inLibrary,
+                    unwatchedCount = unplayedItemCount,
+                    watchedPercent = playedPercentage,
+                    numberOfVersions = numberOfVersions,
+                    useFallbackText = false,
+                    modifier =
+                        Modifier
+                            .fillMaxSize(),
+                )
+            }
+        }
+        Column(
+            verticalArrangement = Arrangement.spacedBy(0.dp),
+            modifier =
+                Modifier
+                    .layout { measurable, constraints ->
+                        val topPaddingPx = (spaceBetweenUnfocused - spaceBetween.value).roundToPx()
+                        val bottomPaddingPx = spaceBetween.value.roundToPx()
+                        val placeable = measurable.measure(constraints)
+                        layout(placeable.width, placeable.height + bottomPaddingPx + topPaddingPx) {
+                            placeable.placeRelative(0, topPaddingPx)
+                        }
+                    }.fillMaxWidth(),
+        ) {
+            Text(
+                text = title ?: "",
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 4.dp)
+                        .enableMarquee(focusedAfterDelay),
+            )
+            Text(
+                text = subtitle ?: "",
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center,
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.Normal,
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 4.dp)
+                        .enableMarquee(focusedAfterDelay),
+            )
+        }
+    }
+}
+
+/**
+ * Returns a [androidx.compose.runtime.State] which represents if the item has been focused for a while
+ */
+@Composable
+fun rememberFocusedAfterDelay(interactionSource: MutableInteractionSource): androidx.compose.runtime.State<Boolean> {
+    val focused by interactionSource.collectIsFocusedAsState()
+    val state = remember { mutableStateOf(false) }
+
+    LaunchedEffect(focused) {
+        if (!focused) {
+            state.value = false
+            return@LaunchedEffect
+        }
+        delay(500L)
+        state.value = true
+    }
+    return state
+}

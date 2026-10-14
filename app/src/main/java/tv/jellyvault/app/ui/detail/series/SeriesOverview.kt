@@ -1,0 +1,359 @@
+@file:UseSerializers(UUIDSerializer::class)
+
+package tv.jellyvault.app.ui.detail.series
+
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.compose.LifecycleResumeEffect
+import kotlinx.coroutines.flow.update
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
+import org.jellyfin.sdk.model.api.BaseItemKind
+import org.jellyfin.sdk.model.api.PersonKind
+import org.jellyfin.sdk.model.extensions.ticks
+import org.jellyfin.sdk.model.serializer.UUIDSerializer
+import org.jellyfin.sdk.model.serializer.toUUID
+import tv.jellyvault.app.R
+import tv.jellyvault.app.data.model.BaseItem
+import tv.jellyvault.app.preferences.UserPreferences
+import tv.jellyvault.app.ui.RequestOrRestoreFocus
+import tv.jellyvault.app.ui.components.ContextMenu
+import tv.jellyvault.app.ui.components.ContextMenuActions
+import tv.jellyvault.app.ui.components.ContextMenuDialog
+import tv.jellyvault.app.ui.components.ErrorMessage
+import tv.jellyvault.app.ui.components.LoadingPage
+import tv.jellyvault.app.ui.data.AddPlaylistViewModel
+import tv.jellyvault.app.ui.data.ItemDetailsDialog
+import tv.jellyvault.app.ui.data.ItemDetailsDialogInfo
+import tv.jellyvault.app.ui.detail.PlaylistDialog
+import tv.jellyvault.app.ui.nav.Destination
+import tv.jellyvault.app.ui.rememberInt
+import tv.jellyvault.app.util.DataLoadingState
+import java.util.UUID
+import kotlin.time.Duration
+
+@Serializable
+data class SeasonEpisode(
+    val season: Int,
+    val episode: Int,
+)
+
+@Serializable
+data class SeasonEpisodeIds(
+    val seasonId: UUID,
+    val seasonNumber: Int?,
+    val episodeId: UUID?,
+    val episodeNumber: Int?,
+)
+
+@Serializable
+data class SeriesOverviewPosition(
+    val seasonTabIndex: Int,
+    val episodeRowIndex: Int,
+)
+
+@Composable
+fun SeriesOverview(
+    preferences: UserPreferences,
+    destination: Destination.SeriesOverview,
+    initialSeasonEpisode: SeasonEpisodeIds?,
+    modifier: Modifier = Modifier,
+    viewModel: SeriesViewModel =
+        hiltViewModel<SeriesViewModel, SeriesViewModel.Factory>(
+            creationCallback = {
+                it.create(destination.itemId, initialSeasonEpisode, SeriesPageType.OVERVIEW)
+            },
+        ),
+    playlistViewModel: AddPlaylistViewModel = hiltViewModel(),
+) {
+    val firstItemFocusRequester = remember { FocusRequester() }
+    val episodeRowFocusRequester = remember { FocusRequester() }
+    val castCrewRowFocusRequester = remember { FocusRequester() }
+    val guestStarRowFocusRequester = remember { FocusRequester() }
+    val extrasRowFocusRequester = remember { FocusRequester() }
+
+    val state by viewModel.state.collectAsState()
+    val episodeList =
+        remember(state.episodes) { (state.episodes as? EpisodeList.Success)?.episodes }
+
+    val position by viewModel.position.collectAsState(SeriesOverviewPosition(0, 0))
+    val currentPosition by rememberUpdatedState(position)
+    LaunchedEffect(Unit) {
+        if (state.seasons.isNotEmpty()) {
+            state.seasons.getOrNull(position.seasonTabIndex)?.let {
+                viewModel.loadEpisodes(it.id, it.indexNumber)
+            }
+        }
+    }
+
+    var overviewDialog by remember { mutableStateOf<ItemDetailsDialogInfo?>(null) }
+    var showContextMenu by remember { mutableStateOf<ContextMenu?>(null) }
+    var showPlaylistDialog by remember { mutableStateOf<UUID?>(null) }
+    val playlistState by playlistViewModel.playlistState.collectAsState()
+
+    var rowFocused by rememberInt()
+
+    val contextActions =
+        remember {
+            ContextMenuActions(
+                navigateTo = viewModel::navigateTo,
+                onClickWatch = { itemId, watched ->
+                    viewModel.setWatched(itemId, watched, currentPosition.episodeRowIndex)
+                },
+                onClickFavorite = { itemId, favorite ->
+                    viewModel.setFavorite(itemId, favorite, currentPosition.episodeRowIndex)
+                },
+                onClickAddPlaylist = { itemId ->
+                    playlistViewModel.loadPlaylists()
+                    showPlaylistDialog = itemId
+                },
+                onSendMediaInfo = viewModel.serverReportService::sendMediaReportFor,
+                onDeleteItem = viewModel::deleteItem,
+                onChooseVersion = { item, source ->
+                    viewModel.savePlayVersion(
+                        item,
+                        source.id!!.toUUID(),
+                    )
+                },
+                onChooseTracks = { result ->
+                    viewModel.saveTrackSelection(
+                        result.item,
+                        result.itemPlayback,
+                        result.trackIndex,
+                        result.streamType,
+                    )
+                },
+                onShowOverview = { overviewDialog = ItemDetailsDialogInfo(it) },
+                onClearChosenStreams = {
+                    val focusedEpisode =
+                        (state.episodes as? EpisodeList.Success)
+                            ?.episodes
+                            ?.getOrNull(currentPosition.episodeRowIndex)
+                    if (focusedEpisode != null) {
+                        viewModel.clearChosenStreams(focusedEpisode, it)
+                    }
+                },
+            )
+        }
+
+    LaunchedEffect(position, state.episodes) {
+        val focusedEpisode =
+            (state.episodes as? EpisodeList.Success)
+                ?.episodes
+                ?.getOrNull(position.episodeRowIndex)
+
+        focusedEpisode?.let {
+            viewModel.lookUpChosenTracks(it.id, it)
+            viewModel.lookupPeopleInEpisode(it)
+        }
+    }
+    val chosenStreams = state.chosenStreams
+
+    val userDto by viewModel.serverRepository.currentUserDtoFlow.collectAsState(null)
+    val preferredSubtitleLanguage = userDto?.configuration?.subtitleLanguagePreference
+
+    when (val st = state.series) {
+        is DataLoadingState.Error -> {
+            ErrorMessage(st, modifier)
+        }
+
+        DataLoadingState.Loading,
+        DataLoadingState.Pending,
+        -> {
+            LoadingPage(modifier)
+        }
+
+        is DataLoadingState.Success<BaseItem> -> {
+            RequestOrRestoreFocus(
+                when (rowFocused) {
+                    EPISODE_ROW -> episodeRowFocusRequester
+                    CAST_AND_CREW_ROW -> castCrewRowFocusRequester
+                    GUEST_STAR_ROW -> guestStarRowFocusRequester
+                    EXTRAS_ROW -> extrasRowFocusRequester
+                    else -> episodeRowFocusRequester
+                },
+                "series_overview",
+            )
+            LifecycleResumeEffect(destination.itemId) {
+                viewModel.onResumePage()
+
+                onPauseOrDispose {
+                    viewModel.release()
+                }
+            }
+
+            SeriesOverviewContent(
+                preferences = preferences,
+                series = st.data,
+                seasons = state.seasons,
+                episodes = state.episodes,
+                chosenStreams = chosenStreams,
+                peopleInEpisode = state.peopleInEpisode.people,
+                seasonExtras = state.extras,
+                position = position,
+                firstItemFocusRequester = firstItemFocusRequester,
+                episodeRowFocusRequester = episodeRowFocusRequester,
+                castCrewRowFocusRequester = castCrewRowFocusRequester,
+                guestStarRowFocusRequester = guestStarRowFocusRequester,
+                extrasRowFocusRequester = extrasRowFocusRequester,
+                onChangeSeason = { index ->
+                    if (index != position.seasonTabIndex) {
+                        state.seasons.getOrNull(index)?.let { season ->
+                            viewModel.loadEpisodes(season.id, season.indexNumber)
+                            viewModel.position.update {
+                                SeriesOverviewPosition(index, 0)
+                            }
+                        }
+                    }
+                },
+                onFocusEpisode = { episodeIndex ->
+                    viewModel.position.update {
+                        it.copy(episodeRowIndex = episodeIndex)
+                    }
+                },
+                onClick = {
+                    rowFocused = EPISODE_ROW
+                    val resumePosition =
+                        it.data.userData
+                            ?.playbackPositionTicks
+                            ?.ticks ?: Duration.ZERO
+                    viewModel.navigateTo(
+                        Destination.Playback(
+                            it.id,
+                            resumePosition.inWholeMilliseconds,
+                        ),
+                    )
+                },
+                onLongClick = { ep ->
+                    showContextMenu =
+                        ContextMenu.ForBaseItem(
+                            fromLongClick = true,
+                            item = ep,
+                            chosenStreams = chosenStreams,
+                            showGoTo = false,
+                            showStreamChoices = true,
+                            canDelete = viewModel.canDelete(ep, preferences.appPreferences),
+                            canRemoveContinueWatching = false,
+                            canRemoveNextUp = false,
+                            actions = contextActions,
+                        )
+                },
+                playOnClick = { resume ->
+                    rowFocused = EPISODE_ROW
+                    episodeList?.getOrNull(position.episodeRowIndex)?.let {
+                        viewModel.release()
+                        viewModel.navigateTo(
+                            Destination.Playback(
+                                it.id,
+                                resume.inWholeMilliseconds,
+                            ),
+                        )
+                    }
+                },
+                watchOnClick = {
+                    episodeList?.getOrNull(position.episodeRowIndex)?.let {
+                        val played = it.data.userData?.played ?: false
+                        viewModel.setWatched(it.id, !played, position.episodeRowIndex)
+                    }
+                },
+                favoriteOnClick = {
+                    episodeList?.getOrNull(position.episodeRowIndex)?.let {
+                        val favorite = it.data.userData?.isFavorite ?: false
+                        viewModel.setFavorite(it.id, !favorite, position.episodeRowIndex)
+                    }
+                },
+                moreOnClick = {
+                    episodeList?.getOrNull(position.episodeRowIndex)?.let { ep ->
+                        showContextMenu =
+                            ContextMenu.ForBaseItem(
+                                fromLongClick = false,
+                                item = ep,
+                                chosenStreams = chosenStreams,
+                                showGoTo = false,
+                                showStreamChoices = true,
+                                canDelete = viewModel.canDelete(ep, preferences.appPreferences),
+                                canRemoveContinueWatching = false,
+                                canRemoveNextUp = false,
+                                actions = contextActions,
+                            )
+                    }
+                },
+                overviewOnClick = {
+                    episodeList?.getOrNull(position.episodeRowIndex)?.let {
+                        overviewDialog = ItemDetailsDialogInfo(it)
+                    }
+                },
+                personOnClick = {
+                    rowFocused =
+                        if (it.type == PersonKind.GUEST_STAR) GUEST_STAR_ROW else CAST_AND_CREW_ROW
+                    viewModel.navigateTo(
+                        Destination.MediaItem(
+                            it.id,
+                            BaseItemKind.PERSON,
+                        ),
+                    )
+                },
+                onClickExtra = { _, extra ->
+                    rowFocused = EXTRAS_ROW
+                    viewModel.navigateTo(extra.destination)
+                },
+                canDelete = { viewModel.canDelete(it, preferences.appPreferences) },
+                onConfirmDelete = viewModel::deleteItem,
+                onChooseVersion = contextActions.onChooseVersion,
+                modifier = modifier,
+            )
+        }
+    }
+    showContextMenu?.let { contextMenu ->
+        ContextMenuDialog(
+            onDismissRequest = { showContextMenu = null },
+            getMediaSource = viewModel.streamChoiceService::chooseSource,
+            contextMenu = contextMenu,
+            preferredSubtitleLanguage = preferredSubtitleLanguage,
+        )
+    }
+    overviewDialog?.let { info ->
+        ItemDetailsDialog(
+            info = info,
+            showFilePath =
+                userDto
+                    ?.policy
+                    ?.isAdministrator == true,
+            onDismissRequest = { overviewDialog = null },
+        )
+    }
+    showPlaylistDialog?.let { itemId ->
+        PlaylistDialog(
+            title = stringResource(R.string.add_to_playlist),
+            state = playlistState,
+            onDismissRequest = { showPlaylistDialog = null },
+            onClick = {
+                playlistViewModel.addToPlaylist(it.id, itemId)
+                showPlaylistDialog = null
+            },
+            createEnabled = true,
+            onCreatePlaylist = {
+                playlistViewModel.createPlaylistAndAddItem(it, itemId)
+                showPlaylistDialog = null
+            },
+            onSearch = playlistViewModel::loadPlaylists,
+            elevation = 3.dp,
+        )
+    }
+}
+
+private const val EPISODE_ROW = 0
+private const val CAST_AND_CREW_ROW = EPISODE_ROW + 1
+private const val GUEST_STAR_ROW = CAST_AND_CREW_ROW + 1
+private const val EXTRAS_ROW = GUEST_STAR_ROW + 1

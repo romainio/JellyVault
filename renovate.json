@@ -1,0 +1,49 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended"
+  ],
+  "packageRules": [
+    {
+      "groupName": "Dependencies",
+      "matchDepTypes": ["dependencies"],
+      "separateMultipleMajor": true
+    },
+    {
+      "groupName": "Github Actions",
+      "matchManagers": ["github-actions"],
+      "pinDigests": true
+    },
+    {
+      "groupName": "Android TV Dependencies",
+      "matchPackageNames": [
+        "androidx.tv:**"
+      ]
+    },
+    {
+      "groupName": "Androidx Media3",
+      "matchPackageNames": [
+        "androidx.media3:**"
+      ]
+    },
+    {
+      "groupName": "Jellyfin SDK",
+      "matchPackageNames": [
+        "org.jellyfin.sdk:**"
+      ],
+      "enabled": false
+    },
+    {
+      "groupName": "AGP",
+      "matchPackageNames": [
+        "com.android.application**"
+      ]
+    },
+    {
+      "groupName": "Kotlin",
+      "matchPackageNames": [
+        "org.jetbrains.kotlin**"
+      ]
+    }
+  ]
+}

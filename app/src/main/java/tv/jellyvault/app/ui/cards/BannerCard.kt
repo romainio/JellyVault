@@ -1,0 +1,281 @@
+package tv.jellyvault.app.ui.cards
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.colorResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.isSpecified
+import androidx.compose.ui.unit.sp
+import androidx.tv.material3.Card
+import androidx.tv.material3.CardDefaults
+import androidx.tv.material3.MaterialTheme
+import androidx.tv.material3.Text
+import coil3.compose.AsyncImage
+import org.jellyfin.sdk.model.api.ImageType
+import tv.jellyvault.app.R
+import tv.jellyvault.app.data.model.BaseItem
+import tv.jellyvault.app.ui.AppColors
+import tv.jellyvault.app.ui.AspectRatios
+import tv.jellyvault.app.ui.Cards
+import tv.jellyvault.app.ui.FontAwesome
+import tv.jellyvault.app.ui.LocalImageUrlService
+import tv.jellyvault.app.ui.enableMarquee
+import tv.jellyvault.app.ui.theme.jv.JvCardDefaults
+
+/**
+ * Displays an image as a card. If no image is available, the name will be shown instead
+ */
+@Composable
+fun BannerCard(
+    name: String?,
+    item: BaseItem?,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    cornerText: String? = null,
+    played: Boolean = false,
+    favorite: Boolean = false,
+    playPercent: Double = 0.0,
+    cardHeight: Dp = 120.dp,
+    aspectRatio: Float = AspectRatios.WIDE,
+    interactionSource: MutableInteractionSource? = null,
+    imageType: ImageType = ImageType.PRIMARY,
+    imageContentScale: ContentScale = ContentScale.FillBounds,
+    useSeriesForPrimary: Boolean = true,
+) {
+    val imageUrlService = LocalImageUrlService.current
+    val density = LocalDensity.current
+    val fillHeight =
+        remember(cardHeight, density) {
+            if (cardHeight.isSpecified) {
+                with(density) {
+                    cardHeight.roundToPx()
+                }
+            } else {
+                null
+            }
+        }
+    val imageUrl =
+        remember(item, fillHeight, imageType, useSeriesForPrimary) {
+            if (item != null) {
+                item.imageUrlOverride
+                    ?: imageUrlService.getItemImageUrl(
+                        item,
+                        imageType,
+                        fillWidth = null,
+                        fillHeight = fillHeight,
+                        useSeriesForPrimary = useSeriesForPrimary,
+                    )
+            } else {
+                null
+            }
+        }
+    var imageError by remember(imageUrl) { mutableStateOf(false) }
+
+    // Stabilize callbacks to prevent AsyncImage from recomposing
+    val currentOnClick by rememberUpdatedState(onClick)
+    val currentOnLongClick by rememberUpdatedState(onLongClick)
+    val source = interactionSource ?: remember { MutableInteractionSource() }
+
+    Card(
+        modifier = modifier.size(cardHeight * aspectRatio, cardHeight),
+        onClick = { currentOnClick() },
+        onLongClick = { currentOnLongClick() },
+        interactionSource = source,
+        scale = JvCardDefaults.scale(),
+        border = JvCardDefaults.border(),
+        glow = JvCardDefaults.glow(),
+        shape = JvCardDefaults.shape(),
+        colors =
+            CardDefaults.colors(
+//                containerColor = Color.Transparent,
+            ),
+    ) {
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxSize(),
+//                    .background(MaterialTheme.colorScheme.surfaceVariant),
+        ) {
+            if (!imageError && imageUrl != null) {
+                AsyncImage(
+                    model = imageUrl,
+                    contentDescription = null,
+                    contentScale = imageContentScale,
+                    onError = remember { { imageError = true } },
+                    modifier = Modifier.fillMaxSize(),
+                )
+            } else {
+                Text(
+                    text = name ?: "",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.titleMedium,
+                    textAlign = TextAlign.Center,
+                    modifier =
+                        Modifier
+                            .padding(16.dp)
+                            .align(Alignment.Center),
+                )
+            }
+            if (played || cornerText != null) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier =
+                        Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(4.dp),
+                ) {
+                    if (played && (playPercent <= 0 || playPercent >= 100)) {
+                        WatchedIcon(Modifier.size(24.dp))
+                    }
+                    if (cornerText != null) {
+                        Box(
+                            modifier =
+                                Modifier
+                                    .background(
+                                        AppColors.TransparentBlack50,
+                                        shape = RoundedCornerShape(25),
+                                    ),
+                        ) {
+                            Text(
+                                text = cornerText,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.padding(4.dp),
+                            )
+                        }
+                    }
+                }
+            }
+            if (favorite) {
+                Text(
+                    modifier =
+                        Modifier
+                            .align(Alignment.TopStart)
+                            .padding(8.dp),
+                    color = colorResource(android.R.color.holo_red_light),
+                    text = stringResource(R.string.fa_heart),
+                    fontSize = 16.sp,
+                    fontFamily = FontAwesome,
+                )
+            }
+            if (playPercent > 0 && playPercent < 100) {
+                Box(
+                    modifier =
+                        Modifier
+                            .align(Alignment.BottomStart)
+                            .background(
+                                MaterialTheme.colorScheme.tertiary,
+                            ).clip(RectangleShape)
+                            .height(Cards.playedPercentHeight)
+                            .fillMaxWidth((playPercent / 100).toFloat()),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun BannerCardWithTitle(
+    title: String?,
+    subtitle: String?,
+    item: BaseItem?,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    cornerText: String? = null,
+    played: Boolean = false,
+    favorite: Boolean = false,
+    playPercent: Double = 0.0,
+    cardHeight: Dp = 120.dp,
+    aspectRatio: Float = AspectRatios.WIDE,
+    interactionSource: MutableInteractionSource = remember { MutableInteractionSource() },
+    imageType: ImageType = ImageType.PRIMARY,
+    imageContentScale: ContentScale = ContentScale.FillBounds,
+    useSeriesForPrimary: Boolean = item?.useSeriesForPrimary ?: true,
+) {
+    val focused by interactionSource.collectIsFocusedAsState()
+    val focusedAfterDelay by rememberFocusedAfterDelay(interactionSource)
+    val aspectRationToUse = aspectRatio.coerceAtLeast(AspectRatios.MIN)
+    val width = cardHeight * aspectRationToUse
+    Column(
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+        modifier = modifier.width(width),
+    ) {
+        BannerCard(
+            name = null,
+            item = item,
+            onClick = onClick,
+            onLongClick = onLongClick,
+            modifier = Modifier,
+            cornerText = cornerText,
+            played = played,
+            favorite = favorite,
+            playPercent = playPercent,
+            cardHeight = cardHeight,
+            aspectRatio = aspectRatio,
+            interactionSource = interactionSource,
+            imageType = imageType,
+            imageContentScale = imageContentScale,
+            useSeriesForPrimary = useSeriesForPrimary,
+        )
+        SlidingCardText(focused) {
+            Text(
+                text = title ?: "",
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center,
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 4.dp)
+                        .enableMarquee(focusedAfterDelay),
+            )
+            Text(
+                text = subtitle ?: "",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Normal,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center,
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 4.dp)
+                        .enableMarquee(focusedAfterDelay),
+            )
+        }
+    }
+}

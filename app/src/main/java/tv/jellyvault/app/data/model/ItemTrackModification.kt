@@ -1,0 +1,35 @@
+@file:UseSerializers(UUIDSerializer::class)
+
+package tv.jellyvault.app.data.model
+
+import androidx.room.Entity
+import androidx.room.ForeignKey
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
+import org.jellyfin.sdk.model.serializer.UUIDSerializer
+import java.util.UUID
+
+/**
+ * Store modifications to an audio/subtitle track in a media item
+ *
+ * For example, the subtitle delay
+ */
+@Entity(
+    foreignKeys = [
+        ForeignKey(
+            entity = JellyfinUser::class,
+            parentColumns = arrayOf("rowId"),
+            childColumns = arrayOf("userId"),
+            onDelete = ForeignKey.CASCADE,
+            onUpdate = ForeignKey.CASCADE,
+        ),
+    ],
+    primaryKeys = ["userId", "itemId", "trackIndex"],
+)
+@Serializable
+data class ItemTrackModification(
+    val userId: Int,
+    val itemId: UUID,
+    val trackIndex: Int,
+    val delayMs: Long,
+)

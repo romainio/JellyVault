@@ -1,0 +1,67 @@
+name: "Bug Report"
+description: Report a bug
+labels: [
+  "bug"
+]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: "Description"
+      description: Please enter a description of the bug
+    validations:
+      required: true
+  - type: textarea
+    id: reprod
+    attributes:
+      label: "Reproduction steps"
+      description: Please enter the steps to reproduce
+      placeholder: |
+        1. Click on '...'
+        2. Scroll to '....'
+        3. See error
+    validations:
+      required: false
+  - type: dropdown
+    id: experimental
+    attributes:
+      label: Experimental settings
+      description: Do you have experiment settings turn on?
+      options:
+        - "Yes"
+        - "No"
+    validations:
+      required: true
+  - type: input
+    id: app-version
+    attributes:
+      label: "App Version"
+      description: What version of the app?
+      placeholder: "v0.5.1"
+    validations:
+      required: true
+  - type: input
+    id: server
+    attributes:
+      label: "Server Version"
+      description: What version of the server?
+      placeholder: "10.11.6"
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: "Device"
+      description: What device are you using?
+      placeholder: "NVIDIA Shield TV Pro 2019"
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: "Logs"
+      description: Please [gather any logs or crash reports](https://github.com/romainio/JellyVault/blob/main/DEVELOPMENT.md#gathering-app-logs) (for example with `adb logcat -d`) and include them here.
+      placeholder: Review logs for personal information before sharing them here publicly!
+      render: bash
+    validations:
+      required: false

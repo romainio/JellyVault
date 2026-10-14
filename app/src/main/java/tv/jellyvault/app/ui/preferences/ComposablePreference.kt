@@ -1,0 +1,320 @@
+package tv.jellyvault.app.ui.preferences
+
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableStateSetOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringArrayResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.dp
+import androidx.tv.material3.MaterialTheme
+import androidx.tv.material3.Text
+import androidx.tv.material3.surfaceColorAtElevation
+import kotlinx.coroutines.launch
+import tv.jellyvault.app.preferences.AppChoicePreference
+import tv.jellyvault.app.preferences.AppClickablePreference
+import tv.jellyvault.app.preferences.AppDestinationPreference
+import tv.jellyvault.app.preferences.AppMultiChoicePreference
+import tv.jellyvault.app.preferences.AppPreference
+import tv.jellyvault.app.preferences.AppSliderPreference
+import tv.jellyvault.app.preferences.AppStringPreference
+import tv.jellyvault.app.preferences.AppSwitchPreference
+import tv.jellyvault.app.ui.components.DialogParams
+import tv.jellyvault.app.ui.components.DialogPopup
+import tv.jellyvault.app.ui.isNotNullOrBlank
+import tv.jellyvault.app.ui.nav.Destination
+import tv.jellyvault.app.util.ExceptionHandler
+import java.io.File
+
+@Suppress("UNCHECKED_CAST")
+@Composable
+fun <T> ComposablePreference(
+    preference: AppPreference<*, T>,
+    value: T?,
+    onValueChange: (T) -> Unit,
+    onNavigate: (Destination) -> Unit,
+    modifier: Modifier = Modifier,
+    interactionSource: MutableInteractionSource = remember { MutableInteractionSource() },
+    onClickPreference: (AppClickablePreference<*>) -> Unit = {},
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    var dialogParams by remember { mutableStateOf<DialogParams?>(null) }
+    var showStringDialog by remember { mutableStateOf<StringInput?>(null) }
+
+    val title = stringResource(preference.title)
+
+    val onLongClick: () -> Unit = {
+        scope.launch(ExceptionHandler()) {
+            when (preference) {
+                else -> null
+            }
+        }
+    }
+
+    when (preference) {
+        AppPreference.MpvConfFile -> {
+            ClickPreference(
+                title = title,
+                onClick = {
+                    val confFile = File(context.filesDir, "mpv.conf")
+                    val contents = if (confFile.exists()) confFile.readText() else ""
+                    showStringDialog =
+                        StringInput(
+                            title = title,
+                            value = contents,
+                            keyboardOptions =
+                                KeyboardOptions(
+                                    capitalization = KeyboardCapitalization.None,
+                                    autoCorrectEnabled = false,
+                                    keyboardType = KeyboardType.Text,
+                                    imeAction = ImeAction.None,
+                                ),
+                            onSubmit = {
+                                confFile.writeText(it)
+                                showStringDialog = null
+                            },
+                            maxLines = 10,
+                            confirmDiscard = true,
+                        )
+                },
+                summary = preference.summary(context, value),
+                interactionSource = interactionSource,
+                modifier = modifier,
+            )
+        }
+
+        is AppDestinationPreference -> {
+            ClickPreference(
+                title = title,
+                onClick = {
+                    onNavigate.invoke(preference.destination)
+                },
+                summary = preference.summary(context, value),
+                interactionSource = interactionSource,
+                modifier = modifier,
+            )
+        }
+
+        is AppClickablePreference -> {
+            ClickPreference(
+                title = title,
+                onClick = { onClickPreference.invoke(preference) },
+                onLongClick = onLongClick,
+                summary = preference.summary(context, value),
+                interactionSource = interactionSource,
+                modifier = modifier,
+            )
+        }
+
+        is AppSwitchPreference -> {
+            SwitchPreference(
+                title = title,
+                value = value as Boolean,
+                onClick = { onValueChange.invoke(!value as T) },
+                summary = preference.summary(context, value),
+                interactionSource = interactionSource,
+                modifier = modifier,
+            )
+        }
+
+        is AppStringPreference -> {
+            ClickPreference(
+                title = title,
+                onClick = {
+                    showStringDialog =
+                        StringInput(
+                            title = title,
+                            value = value as String?,
+                            keyboardOptions =
+                                KeyboardOptions(
+                                    autoCorrectEnabled = false,
+//                                    keyboardType =
+//                                        if (preference == AppPreference.UpdateUrl) {
+//                                            KeyboardType.Uri
+//                                        } else {
+//                                            KeyboardType.Unspecified
+//                                        },
+                                    imeAction = ImeAction.Done,
+                                ),
+                            onSubmit = { input ->
+                                onValueChange.invoke(input as T)
+                                showStringDialog = null
+                            },
+                        )
+                },
+                summary =
+                    preference.summary(context, value)
+                        ?: preference.summary?.let { stringResource(it) },
+                interactionSource = interactionSource,
+                modifier = modifier,
+            )
+        }
+
+        is AppChoicePreference -> {
+            val values = stringArrayResource(preference.displayValues).toList()
+            val subtitles =
+                preference.subtitles?.let { stringArrayResource(preference.subtitles).toList() }
+            val summary =
+                preference.summary?.let { stringResource(it) }
+                    ?: preference.summary(context, value)
+                    ?: preference
+                        .valueToIndex(value as T)
+                        .let { values[it] }
+            val selectedIndex = remember(value) { preference.valueToIndex.invoke(value as T) }
+            ChoicePreference(
+                title = title,
+                summary = summary,
+                possibleValues = values,
+                selectedIndex = selectedIndex,
+                onValueChange = { index ->
+                    onValueChange(preference.indexToValue(index))
+                },
+                modifier = modifier,
+                interactionSource = interactionSource,
+                subtitleDisplay = { index, _ ->
+                    subtitles?.getOrNull(index)?.takeIf { it.isNotNullOrBlank() }?.let {
+                        {
+                            Text(text = it)
+                        }
+                    }
+                },
+            )
+        }
+
+        is AppMultiChoicePreference<*, *> -> {
+            val values = stringArrayResource(preference.displayValues)
+            val subtitles = preference.displayValuesSubtitles?.let { stringArrayResource(it) }
+            val summary =
+                preference.summary?.let { stringResource(it) }
+                    ?: preference.summary(context, value)
+            val selectedValues =
+                remember {
+                    val list = mutableStateSetOf<Any>()
+                    list.addAll(value as List<Any>)
+                    list
+                }
+            MultiChoicePreference(
+                possibleValues = preference.allValues,
+                selectedValues = selectedValues,
+                title = title,
+                summary = summary,
+                onValueChange = {
+                    onValueChange.invoke(it.toList() as T)
+                },
+                valueDisplay = { index, _ ->
+                    Text(values[index])
+                },
+                subtitleDisplay = { index, _ ->
+                    subtitles?.getOrNull(index)?.let { Text(it) }
+                },
+            )
+        }
+
+        is AppSliderPreference -> {
+            val summary =
+                preference.summary(context, value)
+                    ?: preference.summary?.let { stringResource(it) }
+            SliderPreference(
+                preference = preference,
+                title = title,
+                summary = summary,
+                value = value as Long,
+                onChange = { onValueChange(it as T) },
+                summaryBelow = false,
+                interactionSource = interactionSource,
+                modifier = modifier,
+            )
+        }
+    }
+
+    val dialogBackgroundColor = MaterialTheme.colorScheme.surfaceColorAtElevation(3.dp)
+
+    AnimatedVisibility(dialogParams != null) {
+        dialogParams?.let {
+            DialogPopup(
+                showDialog = true,
+                title = it.title,
+                dialogItems = it.items,
+                onDismissRequest = { dialogParams = null },
+                waitToLoad = false,
+                dismissOnClick = false,
+            )
+        }
+    }
+    AnimatedVisibility(showStringDialog != null) {
+        showStringDialog?.let { input ->
+            StringInputDialog(
+                input = input,
+                onSave = {
+                    input.onSubmit.invoke(it)
+                },
+                onDismissRequest = { showStringDialog = null },
+                elevation = 3.dp,
+            )
+        }
+    }
+}
+
+val PreferenceTitleStyle: TextStyle
+    @Composable @ReadOnlyComposable
+    get() = MaterialTheme.typography.titleSmall
+
+val PreferenceSummaryStyle: TextStyle
+    @Composable @ReadOnlyComposable
+    get() = MaterialTheme.typography.bodySmall
+
+@Composable
+fun PreferenceTitle(
+    title: String,
+    modifier: Modifier = Modifier,
+    color: Color = Color.Unspecified,
+) {
+    Text(
+        text = title,
+        style = PreferenceTitleStyle,
+        color = color,
+        modifier = modifier,
+    )
+}
+
+@Composable
+fun PreferenceSummary(
+    summary: String?,
+    modifier: Modifier = Modifier,
+    color: Color = Color.Unspecified,
+) {
+    summary?.let {
+        Text(
+            text = it,
+            style = PreferenceSummaryStyle,
+            color = color,
+            modifier = modifier,
+        )
+    }
+}
+
+data class StringInput(
+    val title: String,
+    val value: String?,
+    val keyboardOptions: KeyboardOptions,
+    val onSubmit: (String) -> Unit,
+    val maxLines: Int = 1,
+    val confirmDiscard: Boolean = false,
+    val isPassword: Boolean = false,
+)

@@ -1,0 +1,300 @@
+package tv.jellyvault.app.ui.components
+
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.tv.material3.MaterialTheme
+import androidx.tv.material3.Text
+import timber.log.Timber
+import tv.jellyvault.app.ui.PreviewTvSpec
+import tv.jellyvault.app.ui.theme.JellyVaultTheme
+import tv.jellyvault.app.ui.theme.jv.JvShapes
+import tv.jellyvault.app.ui.tryRequestFocus
+import tv.jellyvault.app.ui.util.StringStringProvider
+import java.util.SortedMap
+
+@Composable
+fun TabRow(
+    selectedTabIndex: Int,
+    tabs: List<TabDetails>,
+    onClick: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val state = rememberLazyListState()
+    LaunchedEffect(selectedTabIndex) {
+        if (selectedTabIndex in tabs.indices) {
+            state.animateScrollToItem(selectedTabIndex, -(state.layoutInfo.viewportSize.width / 3.5).toInt())
+        }
+    }
+    var rowHasFocus by remember { mutableStateOf(false) }
+
+    val currentSelectedTabIndex by rememberUpdatedState(selectedTabIndex)
+//    val currentFocusRequesters by rememberUpdatedState(focusRequesters)
+    val currentOnClick by rememberUpdatedState(onClick)
+
+    LazyRow(
+        state = state,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        modifier =
+            modifier
+                .onFocusChanged {
+                    rowHasFocus = it.hasFocus
+                }.focusGroup()
+                .focusProperties {
+                    onEnter = {
+                        // If entering from left or right, use last or first tab
+                        // Otherwise use the selected tab
+                        val index = currentSelectedTabIndex
+//                        val requesters = currentFocusRequesters
+                        Timber.v("onEnter requestedFocusDirection=$requestedFocusDirection, selectedTabIndex=$index")
+                        val tab =
+                            if (requestedFocusDirection == FocusDirection.Left) {
+                                tabs.lastOrNull()
+                            } else if (requestedFocusDirection == FocusDirection.Right) {
+                                tabs.firstOrNull()
+                            } else {
+                                tabs.getOrNull(index)
+                            }
+                        (tab?.tabFocusRequester ?: FocusRequester.Default).tryRequestFocus()
+                    }
+                },
+    ) {
+        itemsIndexed(tabs) { index, tab ->
+            val interactionSource = remember { MutableInteractionSource() }
+            val onTabClick =
+                remember(index) {
+                    {
+                        currentOnClick(index)
+                    }
+                }
+            Tab(
+                title = tab.title.getString(),
+                selected = index == selectedTabIndex,
+                rowActive = rowHasFocus,
+                interactionSource = interactionSource,
+                onClick = onTabClick,
+                modifier = Modifier.focusRequester(tab.tabFocusRequester),
+            )
+        }
+    }
+}
+
+@Composable
+fun <T> KeyedTabRow(
+    selectedTabKey: T,
+    tabs: SortedMap<T, TabDetails>,
+    onClick: (T) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val state = rememberLazyListState()
+    LaunchedEffect(selectedTabKey) {
+        tabs[selectedTabKey]?.bringIntoViewRequester?.bringIntoView()
+    }
+    var rowHasFocus by remember { mutableStateOf(false) }
+    val currentSelectedTabKey by rememberUpdatedState(selectedTabKey)
+    val currentOnClick by rememberUpdatedState(onClick)
+
+    val tabKeyList = remember(tabs) { tabs.keys.filterNotNull().toList() }
+
+    LazyRow(
+        state = state,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        modifier =
+            modifier
+                .onFocusChanged {
+                    rowHasFocus = it.hasFocus
+                }.focusGroup()
+                .focusProperties {
+                    onEnter = {
+                        // If entering from left or right, use last or first tab
+                        // Otherwise use the selected tab
+                        val currentKey = currentSelectedTabKey
+//                        val requesters = currentFocusRequesters
+                        Timber.v(
+                            "onEnter requestedFocusDirection=%s, currentSelectedTabKey=%s",
+                            requestedFocusDirection,
+                            currentSelectedTabKey,
+                        )
+                        val key =
+                            if (requestedFocusDirection == FocusDirection.Left) {
+                                tabs.lastKey()
+                            } else if (requestedFocusDirection == FocusDirection.Right) {
+                                tabs.firstKey()
+                            } else {
+                                currentKey
+                            }
+                        val tab = tabs[key]
+                        (tab?.tabFocusRequester ?: FocusRequester.Default).tryRequestFocus()
+                    }
+                },
+    ) {
+        items(tabKeyList, key = { it }) { tabKey ->
+            tabs[tabKey]?.let { tab ->
+                val interactionSource = remember { MutableInteractionSource() }
+                val onTabClick =
+                    remember(tabKey) {
+                        {
+                            currentOnClick(tabKey)
+                        }
+                    }
+                Tab(
+                    title = tab.title.getString(),
+                    selected = tabKey == selectedTabKey,
+                    rowActive = rowHasFocus,
+                    interactionSource = interactionSource,
+                    onClick = onTabClick,
+                    modifier =
+                        Modifier
+                            .focusRequester(tab.tabFocusRequester)
+                            .bringIntoViewRequester(tab.bringIntoViewRequester),
+                )
+            }
+        }
+    }
+}
+
+/**
+ * (container, content) of a pill tab: white for the active tab, glass when focused, plain otherwise
+ */
+fun tabColors(
+    selected: Boolean,
+    focused: Boolean,
+    onSurface: Color,
+    onSurfaceVariant: Color,
+    inverseOnSurface: Color,
+): Pair<Color, Color> =
+    when {
+        selected -> onSurface to inverseOnSurface
+        focused -> onSurface.copy(alpha = 0.14f) to onSurface
+        else -> Color.Transparent to onSurfaceVariant
+    }
+
+@Composable
+fun Tab(
+    title: String,
+    selected: Boolean,
+    rowActive: Boolean,
+    onClick: () -> Unit,
+    interactionSource: MutableInteractionSource,
+    modifier: Modifier = Modifier,
+) {
+    val focused by interactionSource.collectIsFocusedAsState()
+    val (container, content) =
+        tabColors(
+            selected = selected,
+            focused = focused && rowActive,
+            onSurface = MaterialTheme.colorScheme.onSurface,
+            onSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant,
+            inverseOnSurface = MaterialTheme.colorScheme.inverseOnSurface,
+        )
+    Box(
+        modifier =
+            modifier
+                .clickable(
+                    enabled = true,
+                    interactionSource = interactionSource,
+                    onClick = onClick,
+                    indication = null,
+                ),
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.labelLarge,
+            color = content,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier =
+                Modifier
+                    .background(container, JvShapes.Button)
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+        )
+    }
+}
+
+@Composable
+fun TabIndicator(
+    selected: Boolean,
+    rowActive: Boolean,
+    focused: Boolean,
+    tabWidth: Dp,
+    modifier: Modifier = Modifier,
+) {
+    val width by animateDpAsState(if (rowActive && focused) tabWidth else tabWidth * .25f)
+    val backgroundColor =
+        if (rowActive && focused) {
+            MaterialTheme.colorScheme.border
+        } else if (selected) {
+            MaterialTheme.colorScheme.onSurface
+        } else {
+            Color.Transparent
+        }
+    Box(
+        modifier =
+            modifier
+                .height(2.dp)
+                .fillMaxWidth()
+                .width(width)
+                .background(backgroundColor),
+    )
+}
+
+@PreviewTvSpec
+@Composable
+private fun TabRowPreview() {
+    JellyVaultTheme {
+        Column(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
+            TabRow(
+                selectedTabIndex = -1,
+                tabs =
+                    remember {
+                        listOf("Tab 1", "Tab 2", "Tab 3").map { TabDetails(StringStringProvider(it)) }
+                    },
+                onClick = {},
+            )
+            Tab(
+                title = "This is a Tab",
+                selected = true,
+                rowActive = true,
+                onClick = {},
+                interactionSource = remember { MutableInteractionSource() },
+                modifier = Modifier.width(120.dp),
+            )
+        }
+    }
+}

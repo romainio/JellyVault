@@ -1,0 +1,441 @@
+package tv.jellyvault.app.services
+
+import android.Manifest
+import android.annotation.SuppressLint
+import android.content.ContentValues
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
+import android.os.Environment
+import android.provider.MediaStore
+import android.widget.Toast
+import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
+import androidx.core.content.edit
+import androidx.preference.PreferenceManager
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.Response
+import timber.log.Timber
+import tv.jellyvault.app.BuildConfig
+import tv.jellyvault.app.R
+import tv.jellyvault.app.services.UpdateChecker.Companion.ASSET_NAME
+import tv.jellyvault.app.services.hilt.StandardOkHttpClient
+import tv.jellyvault.app.ui.isNotNullOrBlank
+import tv.jellyvault.app.ui.showToast
+import tv.jellyvault.app.util.JvDispatchers
+import tv.jellyvault.app.util.Version
+import java.io.File
+import java.io.InputStream
+import java.io.OutputStream
+import java.util.Date
+import javax.inject.Inject
+import javax.inject.Singleton
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.milliseconds
+
+/**
+ * Checks if an app update is available
+ */
+@Singleton
+class UpdateChecker
+    @Inject
+    constructor(
+        @param:ApplicationContext private val context: Context,
+        @param:StandardOkHttpClient private val okHttpClient: OkHttpClient,
+    ) {
+        companion object {
+            const val REPO_API = "https://api.github.com/repos/romainio/JellyVault"
+            const val ASSET_NAME = "JellyVault"
+            const val APK_NAME = "$ASSET_NAME.apk"
+
+            private const val APK_MIME_TYPE = "application/vnd.android.package-archive"
+
+            private val NOTE_REGEX = Regex("<!-- app-note:(.+) -->")
+
+            val ACTIVE = BuildConfig.UPDATING_ENABLED
+        }
+
+        /**
+         * If the app hasn't recently checked, check for any updates and if there is one, show a toast message
+         *
+         * This is safe to call many times because it will only show the toast at most once every 12 hours
+         */
+        suspend fun maybeShowUpdateToast(
+            updateUrl: String,
+            showNegativeToast: Boolean = false,
+        ) {
+            val pref = PreferenceManager.getDefaultSharedPreferences(context)
+            val now = Date()
+            val lastUpdateCheckThreshold =
+                pref
+                    .getLong(context.getString(R.string.pref_key_update_last_check_threshold), 12)
+                    .hours
+            val lastUpdateCheck =
+                pref.getLong(
+                    context.getString(R.string.pref_key_update_last_check),
+                    0,
+                )
+            val timeSince = (now.time - lastUpdateCheck).milliseconds
+            Timber.v("Last successful update check was $timeSince ago")
+            val installedVersion = getInstalledVersion()
+            val latestRelease = getLatestRelease(updateUrl)
+            if (latestRelease != null && latestRelease.version.isGreaterThan(installedVersion)) {
+                Timber.v("Update available $installedVersion => ${latestRelease.version}")
+                pref.edit {
+                    putLong(context.getString(R.string.pref_key_update_last_check), now.time)
+                }
+                if (lastUpdateCheckThreshold >= timeSince) {
+                    Timber.i(
+                        "Skipping update notification, threshold is $lastUpdateCheckThreshold",
+                    )
+                } else {
+                    showToast(
+                        context,
+                        "Update available: $installedVersion => ${latestRelease.version}!",
+                        Toast.LENGTH_LONG,
+                    )
+                }
+            } else {
+                Timber.v("No update available for $installedVersion")
+                if (showNegativeToast) {
+                    showToast(
+                        context,
+                        "No updates available, $installedVersion is the latest!",
+                        Toast.LENGTH_LONG,
+                    )
+                }
+            }
+        }
+
+        /**
+         * Get the currently installed version
+         */
+        fun getInstalledVersion(): Version {
+            val pkgInfo = context.packageManager.getPackageInfo(context.packageName, 0)
+            return Version.fromString(pkgInfo.versionName!!)
+        }
+
+        suspend fun getRelease(version: Version): Release? {
+            val url =
+                "$REPO_API/releases/tags/v${version.major}.${version.minor}.${version.patch}"
+            return withContext(JvDispatchers.IO) {
+                val request =
+                    Request
+                        .Builder()
+                        .url(url)
+                        .get()
+                        .build()
+                getRelease(request)
+            }
+        }
+
+        /**
+         * Get the latest released version
+         */
+        suspend fun getLatestRelease(updateUrl: String): Release? =
+            withContext(JvDispatchers.IO) {
+                val request =
+                    Request
+                        .Builder()
+                        .url(updateUrl)
+                        .get()
+                        .build()
+                getRelease(request)
+            }
+
+        private fun getRelease(request: Request): Release? {
+            return okHttpClient.newCall(request).execute().use {
+                if (it.isSuccessful) {
+                    val result = Json.parseToJsonElement(it.body.string())
+                    val name = result.jsonObject["name"]?.jsonPrimitive?.contentOrNull
+                    val version = Version.tryFromString(name)
+                    val publishedAt =
+                        result.jsonObject["published_at"]?.jsonPrimitive?.contentOrNull
+                    val body = result.jsonObject["body"]?.jsonPrimitive?.contentOrNull
+                    val downloadUrl =
+                        result.jsonObject["assets"]
+                            ?.jsonArray
+                            ?.let { assets -> getDownloadUrl(assets, BuildConfig.DEBUG) }
+                    Timber.v("version=$version, downloadUrl=$downloadUrl")
+                    if (version != null) {
+                        val notes =
+                            if (body.isNotNullOrBlank()) {
+                                NOTE_REGEX
+                                    .findAll(body)
+                                    .map { m ->
+                                        m.groupValues[1]
+                                    }.toList()
+                            } else {
+                                emptyList()
+                            }
+                        return@use Release(version, downloadUrl, publishedAt, body, notes)
+                    } else {
+                        Timber.w("Update version parsing failed. name=$name")
+                    }
+                } else {
+                    Timber.w("Update check failed ${it.code}: ${it.message}")
+                }
+                return@use null
+            }
+        }
+
+        /**
+         * Download and install an update
+         */
+        @SuppressLint("RequestInstallPackagesPolicy")
+        suspend fun installRelease(
+            release: Release,
+            callback: DownloadCallback,
+        ) {
+            withContext(JvDispatchers.IO) {
+                cleanup()
+                val request =
+                    Request
+                        .Builder()
+                        .url(release.downloadUrl!!)
+                        .get()
+                        .build()
+                okHttpClient.newCall(request).execute().use {
+                    if (it.isSuccessful) {
+                        Timber.v("Request successful for ${release.downloadUrl}")
+                        withContext(JvDispatchers.Main) {
+                            callback.contentLength(it.body.contentLength())
+                        }
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                            val contentValues =
+                                ContentValues().apply {
+                                    put(MediaStore.MediaColumns.DISPLAY_NAME, APK_NAME)
+                                    put(MediaStore.MediaColumns.MIME_TYPE, APK_MIME_TYPE)
+                                    put(
+                                        MediaStore.MediaColumns.RELATIVE_PATH,
+                                        Environment.DIRECTORY_DOWNLOADS,
+                                    )
+                                }
+                            val resolver = context.contentResolver
+                            val uri =
+                                resolver.insert(
+                                    MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                                    contentValues,
+                                )
+                            if (uri != null) {
+                                it.body.byteStream().use { input ->
+                                    resolver.openOutputStream(uri).use { output ->
+                                        copyTo(input, output!!, callback = callback)
+                                    }
+                                }
+
+                                val intent = Intent(Intent.ACTION_INSTALL_PACKAGE)
+                                intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+                                intent.data = uri
+                                context.startActivity(intent)
+                            } else {
+                                Timber.e("Resolver URI is null, trying fallback")
+//                                showToast(context, "Unable to download the apk")
+                                val targetFile = fallbackDownload(it, callback)
+                                val intent = Intent(Intent.ACTION_INSTALL_PACKAGE)
+                                intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+                                intent.data =
+                                    FileProvider.getUriForFile(
+                                        context,
+                                        context.packageName + ".provider",
+                                        targetFile,
+                                    )
+                                context.startActivity(intent)
+                            }
+                        } else {
+                            val targetFile = fallbackDownload(it, callback)
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                                val intent = Intent(Intent.ACTION_INSTALL_PACKAGE)
+                                intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+                                intent.data =
+                                    FileProvider.getUriForFile(
+                                        context,
+                                        context.packageName + ".provider",
+                                        targetFile,
+                                    )
+                                context.startActivity(intent)
+                            } else {
+                                val intent = Intent(Intent.ACTION_VIEW)
+                                intent.setDataAndType(Uri.fromFile(targetFile), APK_MIME_TYPE)
+                                intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                context.startActivity(intent)
+                            }
+                        }
+                    } else {
+                        Timber.v("Request failed for ${release.downloadUrl}: ${it.code}")
+                        showToast(context, "Error downloading the apk: ${it.code}")
+                    }
+                }
+            }
+        }
+
+        private suspend fun fallbackDownload(
+            response: Response,
+            callback: DownloadCallback,
+        ): File {
+            val downloadDir =
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+            downloadDir.mkdirs()
+            val targetFile = File(downloadDir, APK_NAME)
+            targetFile.outputStream().use { output ->
+                response.body.byteStream().use { input ->
+                    copyTo(input, output, callback = callback)
+                }
+            }
+            return targetFile
+        }
+
+        /**
+         * Check if the app has permission to write the download
+         */
+        fun hasPermissions(): Boolean =
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q ||
+                (
+                    ContextCompat.checkSelfPermission(
+                        context,
+                        Manifest.permission.WRITE_EXTERNAL_STORAGE,
+                    ) == PackageManager.PERMISSION_GRANTED &&
+                        ContextCompat.checkSelfPermission(
+                            context,
+                            Manifest.permission.READ_EXTERNAL_STORAGE,
+                        ) == PackageManager.PERMISSION_GRANTED
+                )
+
+        /**
+         * Delete previously downloaded APKs
+         */
+        fun cleanup() {
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    context.contentResolver
+                        .query(
+                            MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                            arrayOf(
+                                MediaStore.MediaColumns._ID,
+                                MediaStore.Files.FileColumns.DISPLAY_NAME,
+                            ),
+                            "${MediaStore.MediaColumns.DISPLAY_NAME} LIKE ? AND ${MediaStore.MediaColumns.MIME_TYPE} = ?",
+                            arrayOf(context.getString(R.string.app_name) + "%", APK_MIME_TYPE),
+                            null,
+                        )?.use { cursor ->
+                            while (cursor.moveToNext()) {
+                                val id = cursor.getString(0)
+                                val displayName = cursor.getString(1)
+                                Timber.v("id=$id, displayName=$displayName")
+                            }
+                        }
+                    val deletedRows =
+                        context.contentResolver.delete(
+                            MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                            "${MediaStore.MediaColumns.DISPLAY_NAME} LIKE ? AND ${MediaStore.MediaColumns.MIME_TYPE} = ?",
+                            arrayOf("$ASSET_NAME%", APK_MIME_TYPE),
+                        )
+                    Timber.i("Deleted $deletedRows rows")
+                } else {
+                    val downloadDir =
+                        Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                    val targetFile = File(downloadDir, APK_NAME)
+                    if (targetFile.exists()) {
+                        targetFile.delete()
+                    }
+                }
+            } catch (ex: Exception) {
+                Timber.e(ex, "Exception during cleanup")
+            }
+        }
+    }
+
+@Serializable
+data class Release(
+    val version: Version,
+    val downloadUrl: String?,
+    val publishedAt: String?,
+    val body: String?,
+    val notes: List<String>,
+) {
+    val content =
+        "# ${version}\n" +
+            (
+                (notes.joinToString("\n").takeIf { it.isNotNullOrBlank() } ?: "") +
+                    (body ?: "")
+            ).replace(
+                Regex("https://github.com/\\w*/\\w+/pull/(\\d+)"),
+                "#$1",
+            )
+                // Remove the last line for full changelog since it's just a link
+                .replace(Regex("\\*\\*Full Changelog\\*\\*.*"), "")
+}
+
+interface DownloadCallback {
+    fun contentLength(contentLength: Long)
+
+    fun bytesDownloaded(bytes: Long)
+}
+
+suspend fun copyTo(
+    input: InputStream,
+    out: OutputStream,
+    bufferSize: Int = 64 * 1024,
+    callback: DownloadCallback,
+): Long =
+    withContext(JvDispatchers.IO) {
+        var bytesCopied: Long = 0
+        val buffer = ByteArray(bufferSize)
+        var bytes = input.read(buffer)
+        while (bytes >= 0) {
+            out.write(buffer, 0, bytes)
+            bytesCopied += bytes
+            withContext(JvDispatchers.Main) {
+                callback.bytesDownloaded(bytesCopied)
+            }
+            bytes = input.read(buffer)
+        }
+        return@withContext bytesCopied
+    }
+
+fun getDownloadUrl(
+    assets: JsonArray,
+    debug: Boolean,
+    supportedABIs: List<String> = Build.SUPPORTED_ABIS.toList(),
+): String? {
+    val abiSuffix = supportedABIs.firstOrNull().let { if (it != null) "-$it" else "" }
+    val releaseSuffix = if (debug) "-debug" else "-release"
+    val preferredNames =
+        buildList {
+            add("$ASSET_NAME${releaseSuffix}$abiSuffix.apk")
+            add("$ASSET_NAME$releaseSuffix.apk")
+            if (!debug) {
+                // The short names the release workflow publishes, e.g. JellyVault-arm64-v8a.apk
+                if (abiSuffix.isNotEmpty()) add("$ASSET_NAME$abiSuffix.apk")
+                add("$ASSET_NAME.apk")
+            }
+        }
+    var preferredAsset: JsonObject? = null
+    outer@ for (name in preferredNames) {
+        for (asset in assets) {
+            val assetName =
+                asset.jsonObject["name"]?.jsonPrimitive?.contentOrNull
+            if (name == assetName) {
+                preferredAsset = asset.jsonObject
+                break@outer
+            }
+        }
+    }
+    return preferredAsset
+        ?.get("browser_download_url")
+        ?.jsonPrimitive
+        ?.contentOrNull
+}

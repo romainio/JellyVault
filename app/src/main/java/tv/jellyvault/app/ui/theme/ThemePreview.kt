@@ -1,0 +1,330 @@
+package tv.jellyvault.app.ui.theme
+
+import android.content.res.Configuration.UI_MODE_TYPE_TELEVISION
+import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.FocusInteraction
+import androidx.compose.foundation.interaction.Interaction
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
+import androidx.tv.material3.ListItem
+import androidx.tv.material3.LocalContentColor
+import androidx.tv.material3.MaterialTheme
+import androidx.tv.material3.NavigationDrawerScope
+import androidx.tv.material3.Text
+import androidx.tv.material3.surfaceColorAtElevation
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
+import tv.jellyvault.app.R
+import tv.jellyvault.app.preferences.AppPreference
+import tv.jellyvault.app.preferences.AppThemeColors
+import tv.jellyvault.app.ui.AspectRatios
+import tv.jellyvault.app.ui.cards.SeasonCard
+import tv.jellyvault.app.ui.cards.WatchedIcon
+import tv.jellyvault.app.ui.nav.NavDrawerItem
+import tv.jellyvault.app.ui.nav.NavItem
+import tv.jellyvault.app.ui.playback.overlay.PlaybackButton
+import tv.jellyvault.app.ui.preferences.SliderPreference
+import tv.jellyvault.app.ui.preferences.SwitchPreference
+
+@Preview(
+    device = "spec:width=1200dp,height=3000dp",
+    backgroundColor = 0xFF383535,
+    uiMode = UI_MODE_TYPE_TELEVISION,
+)
+@Composable
+private fun ThemePreview() {
+    val themes = AppThemeColors.entries.filterNot { it == AppThemeColors.UNRECOGNIZED }
+    Column {
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(3),
+            contentPadding = PaddingValues(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            items(themes) {
+                ThemeExample(it)
+            }
+        }
+    }
+}
+
+@Composable
+private fun SectionTitle(text: String) {
+    Text(
+        text = text,
+        color = Color.White,
+        fontWeight = FontWeight.SemiBold,
+        modifier = Modifier.padding(top = 8.dp),
+    )
+}
+
+@Composable
+private fun ThemeExample(theme: AppThemeColors) {
+    val source = remember { PreviewInteractionSource() }
+    JellyVaultTheme(appThemeColors = theme) {
+        CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
+            Column(Modifier.background(MaterialTheme.colorScheme.background)) {
+                Text(
+                    text = theme.toString(),
+                    color = Color.White,
+                    modifier = Modifier.padding(8.dp),
+                )
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.padding(8.dp),
+                ) {
+                    SectionTitle("Cards")
+                    Row(
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        WatchedIcon()
+                        // TODO
+//                        BannerCard(
+//                            name = "Card",
+//                            imageUrl = null,
+//                            onClick = { },
+//                            onLongClick = {},
+//                            playPercent = .5,
+//                            cardHeight = 64.dp,
+//                        )
+//                        BannerCard(
+//                            name = "Card",
+//                            imageUrl = null,
+//                            onClick = { },
+//                            onLongClick = {},
+//                            playPercent = .5,
+//                            cardHeight = 64.dp,
+//                            interactionSource = source,
+//                        )
+                        SeasonCard(
+                            title = "Card",
+                            subtitle = "2025",
+                            name = "N/A",
+                            imageUrl = "abc",
+                            isFavorite = true,
+                            isPlayed = true,
+                            unplayedItemCount = 2,
+                            playedPercentage = 50.0,
+                            numberOfVersions = 2,
+                            onClick = { },
+                            onLongClick = {},
+                            imageHeight = 120.dp,
+                            interactionSource = source,
+                            showImageOverlay = true,
+                            aspectRatio = AspectRatios.TALL,
+                        )
+                        SeasonCard(
+                            title = "Watched",
+                            subtitle = "2025",
+                            name = "N/A",
+                            imageUrl = "abc",
+                            isFavorite = false,
+                            isPlayed = true,
+                            unplayedItemCount = 2,
+                            playedPercentage = 0.0,
+                            numberOfVersions = 0,
+                            onClick = { },
+                            onLongClick = {},
+                            imageHeight = 120.dp,
+//                        interactionSource = source,
+                            showImageOverlay = true,
+                            aspectRatio = AspectRatios.SQUARE,
+                        )
+                    }
+                    SectionTitle("Controls")
+                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        SliderPreference(
+                            preference = AppPreference.AutoPlayNextDelay,
+                            title = "Slider",
+                            summary = "5 seconds",
+                            value = 30,
+                            onChange = {},
+                            modifier = Modifier.weight(1f),
+                        )
+                        SliderPreference(
+                            preference = AppPreference.AutoPlayNextDelay,
+                            title = "Slider",
+                            summary = "5 seconds",
+                            value = 30,
+                            onChange = {},
+                            modifier = Modifier.weight(1f),
+                            interactionSource = source,
+                        )
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        SwitchPreference(
+                            title = "Switch",
+                            value = false,
+                            onClick = {},
+                            summaryOn = "Enabled",
+                            summaryOff = "Disabled",
+                            modifier = Modifier.weight(1f),
+                        )
+                        SwitchPreference(
+                            title = "Switch",
+                            value = false,
+                            onClick = {},
+                            summaryOn = "Enabled",
+                            summaryOff = "Disabled",
+                            modifier = Modifier.weight(1f),
+                            interactionSource = source,
+                        )
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        SwitchPreference(
+                            title = "Switch",
+                            value = true,
+                            onClick = {},
+                            summaryOn = "Enabled",
+                            summaryOff = "Disabled",
+                            modifier = Modifier.weight(1f),
+                        )
+                        SwitchPreference(
+                            title = "Switch",
+                            value = true,
+                            onClick = {},
+                            summaryOn = "Enabled",
+                            summaryOff = "Disabled",
+                            modifier = Modifier.weight(1f),
+                            interactionSource = source,
+                        )
+                    }
+                    SectionTitle("Nav drawer")
+                    val navScope = NavScope(true)
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        modifier = Modifier.background(MaterialTheme.colorScheme.surfaceColorAtElevation(1.dp)),
+                    ) {
+                        navScope.apply {
+                            NavItem(
+                                library = NavDrawerItem.Favorites,
+                                onClick = { },
+                                selected = false,
+                                moreExpanded = false,
+                                drawerOpen = true,
+                                modifier = Modifier,
+                            )
+                            NavItem(
+                                library = NavDrawerItem.Favorites,
+                                onClick = { },
+                                selected = false,
+                                moreExpanded = false,
+                                drawerOpen = true,
+                                modifier = Modifier,
+                                interactionSource = source,
+                            )
+                        }
+                    }
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        modifier = Modifier.background(MaterialTheme.colorScheme.surfaceColorAtElevation(1.dp)),
+                    ) {
+                        navScope.apply {
+                            NavItem(
+                                library = NavDrawerItem.Favorites,
+                                onClick = { },
+                                selected = true,
+                                moreExpanded = false,
+                                drawerOpen = true,
+                                modifier = Modifier,
+                            )
+                            NavItem(
+                                library = NavDrawerItem.Favorites,
+                                onClick = { },
+                                selected = true,
+                                moreExpanded = false,
+                                drawerOpen = true,
+                                modifier = Modifier,
+                                interactionSource = source,
+                            )
+                        }
+                    }
+                    SectionTitle("Playback controls")
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        modifier = Modifier.background(MaterialTheme.colorScheme.surfaceVariant),
+                    ) {
+                        PlaybackButton(
+                            modifier = Modifier,
+                            iconRes = R.drawable.baseline_play_arrow_24,
+                            onClick = {},
+                            onControllerInteraction = {},
+                        )
+                        PlaybackButton(
+                            modifier = Modifier,
+                            iconRes = R.drawable.baseline_play_arrow_24,
+                            onClick = {},
+                            onControllerInteraction = {},
+                            interactionSource = source,
+                        )
+                        PlaybackButton(
+                            modifier = Modifier,
+                            iconRes = R.drawable.baseline_pause_24,
+                            onClick = {},
+                            onControllerInteraction = {},
+                        )
+                        PlaybackButton(
+                            modifier = Modifier,
+                            iconRes = R.drawable.baseline_pause_24,
+                            onClick = {},
+                            onControllerInteraction = {},
+                            interactionSource = source,
+                        )
+                    }
+                    SectionTitle("List items")
+                    Column(
+                        modifier = Modifier.background(MaterialTheme.colorScheme.surface),
+                    ) {
+                        ListItem(
+                            selected = false,
+                            enabled = true,
+                            headlineContent = { Text("Headline content") },
+                            supportingContent = { Text("Support content") },
+                            onClick = {},
+                        )
+                        ListItem(
+                            selected = true,
+                            enabled = true,
+                            headlineContent = { Text("Headline content") },
+                            supportingContent = { Text("Support content") },
+                            onClick = {},
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+class PreviewInteractionSource : MutableInteractionSource {
+    override val interactions: Flow<Interaction>
+        get() = flowOf(FocusInteraction.Focus())
+
+    override suspend fun emit(interaction: Interaction) {
+    }
+
+    override fun tryEmit(interaction: Interaction): Boolean = false
+}
+
+class NavScope(
+    override val hasFocus: Boolean,
+) : NavigationDrawerScope

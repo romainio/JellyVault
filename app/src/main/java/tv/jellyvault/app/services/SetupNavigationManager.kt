@@ -1,0 +1,56 @@
+package tv.jellyvault.app.services
+
+import androidx.compose.runtime.mutableStateListOf
+import androidx.navigation3.runtime.NavKey
+import kotlinx.serialization.Serializable
+import org.acra.ACRA
+import timber.log.Timber
+import tv.jellyvault.app.data.CurrentUser
+import tv.jellyvault.app.data.model.JellyfinServer
+import javax.inject.Inject
+import javax.inject.Singleton
+
+/**
+ * Manages navigating for setup
+ */
+@Singleton
+class SetupNavigationManager
+    @Inject
+    constructor(
+        private val navigationManager: NavigationManager,
+    ) {
+        var backStack: MutableList<SetupDestination> = mutableStateListOf(SetupDestination.Loading)
+
+        /**
+         * Go to the specified [SetupDestination]
+         */
+        fun navigateTo(destination: SetupDestination) {
+            backStack[0] = destination
+            log()
+        }
+
+        private fun log() {
+            val dest = backStack.lastOrNull().toString()
+            Timber.i("Current setup destination: %s", dest)
+            ACRA.errorReporter.putCustomData("setupDestination", dest)
+        }
+    }
+
+@Serializable
+sealed interface SetupDestination : NavKey {
+    @Serializable
+    data object Loading : SetupDestination
+
+    @Serializable
+    data object ServerList : SetupDestination
+
+    @Serializable
+    data class UserList(
+        val server: JellyfinServer,
+    ) : SetupDestination
+
+    @Serializable
+    data class AppContent(
+        val current: CurrentUser,
+    ) : SetupDestination
+}

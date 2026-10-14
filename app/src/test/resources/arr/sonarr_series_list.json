@@ -1,0 +1,6 @@
+[{"id": 13, "tvdbId": 81189, "title": "Breaking Bad", "monitored": true, "qualityProfileId": 1, "path": "/data/tv/Breaking Bad",
+  "seasons": [
+    {"seasonNumber": 0, "monitored": false, "statistics": {"episodeFileCount": 0, "episodeCount": 0, "totalEpisodeCount": 9, "percentOfEpisodes": 0}},
+    {"seasonNumber": 1, "monitored": true, "statistics": {"episodeFileCount": 7, "episodeCount": 7, "totalEpisodeCount": 7, "percentOfEpisodes": 100}},
+    {"seasonNumber": 2, "monitored": false, "statistics": {"episodeFileCount": 0, "episodeCount": 0, "totalEpisodeCount": 13, "percentOfEpisodes": 0}}
+  ]}]

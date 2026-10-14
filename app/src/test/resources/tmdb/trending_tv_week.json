@@ -1,0 +1,6 @@
+{
+  "page": 1,
+  "results": [
+    {"id": 94997, "media_type": "tv", "name": "House of the Dragon", "overview": "La guerre civile Targaryen.", "poster_path": "/tv1.jpg", "backdrop_path": "/tvb1.jpg", "first_air_date": "2022-08-21", "vote_average": 8.4, "genre_ids": [10765, 18]}
+  ]
+}

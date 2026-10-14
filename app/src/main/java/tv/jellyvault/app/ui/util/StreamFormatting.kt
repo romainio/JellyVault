@@ -1,0 +1,172 @@
+package tv.jellyvault.app.ui.util
+
+import android.content.res.Resources
+import org.jellyfin.sdk.model.api.MediaStream
+import org.jellyfin.sdk.model.api.MediaStreamType
+import org.jellyfin.sdk.model.api.VideoRange
+import org.jellyfin.sdk.model.api.VideoRangeType
+import tv.jellyvault.app.R
+import tv.jellyvault.app.ui.isNotNullOrBlank
+import tv.jellyvault.app.util.languageName
+import tv.jellyvault.app.util.profile.Codec
+
+/**
+ * Collection of utility functions for formatting the display of media streams
+ */
+object StreamFormatting {
+    fun interlaced(interlaced: Boolean) = if (interlaced) "i" else "p"
+
+    // Adapted from https://github.com/jellyfin/jellyfin/blob/aa4ddd139a7c01889a99561fc314121ba198dd70/MediaBrowser.Model/Entities/MediaStream.cs#L714
+    fun resolutionString(
+        width: Int,
+        height: Int,
+        interlaced: Boolean,
+    ): String =
+        if (height > width) {
+            // Vertical video
+            resolutionString(height, width, interlaced)
+        } else {
+            when {
+                width > 5120 || height > 4320 -> "8K"
+                width > 2560 || height > 1440 -> "4K"
+                width > 1920 || height > 1080 -> "1440" + interlaced(interlaced)
+                width > 1280 || height > 962 -> "1080" + interlaced(interlaced)
+                width > 1024 || height > 576 -> "720" + interlaced(interlaced)
+                width > 960 || height > 544 -> "576" + interlaced(interlaced)
+                width > 845 || height > 480 -> "540" + interlaced(interlaced)
+                width > 720 || height > 404 -> "480" + interlaced(interlaced)
+                width > 682 || height > 384 -> "404" + interlaced(interlaced)
+                width > 640 || height > 360 -> "384" + interlaced(interlaced)
+                width > 426 || height > 240 -> "360" + interlaced(interlaced)
+                width > 256 || height > 144 -> "240" + interlaced(interlaced)
+                else -> height.toString() + interlaced(interlaced)
+            }
+        }
+
+    fun formatVideoRange(
+        resources: Resources,
+        videoRange: VideoRange?,
+        type: VideoRangeType?,
+        doviTitle: String?,
+    ): String? =
+        when (videoRange) {
+            VideoRange.UNKNOWN,
+            VideoRange.SDR, null,
+            -> {
+                null
+            }
+
+            VideoRange.HDR -> {
+                if (doviTitle.isNotNullOrBlank()) {
+                    resources.getString(R.string.dolby_vision)
+                } else {
+                    when (type) {
+                        VideoRangeType.UNKNOWN,
+                        VideoRangeType.SDR,
+                        null,
+                        -> null
+
+                        VideoRangeType.HDR10 -> "HDR10"
+
+                        VideoRangeType.HDR10_PLUS -> "HDR10+"
+
+                        VideoRangeType.HLG -> "HLG"
+
+                        VideoRangeType.DOVI,
+                        VideoRangeType.DOVI_WITH_HDR10,
+                        VideoRangeType.DOVI_WITH_HLG,
+                        VideoRangeType.DOVI_WITH_SDR,
+                        -> resources.getString(R.string.dolby_vision)
+                    }
+                }
+            }
+        }
+
+    fun formatAudioCodec(
+        resources: Resources,
+        codec: String?,
+        profile: String?,
+    ): String? =
+        when {
+            profile?.contains("Dolby Atmos", true) == true -> {
+                resources.getString(R.string.dolby_atmos)
+            }
+
+            profile?.contains("DTS", true) == true -> {
+                when {
+                    profile.contains("X", true) -> resources.getString(R.string.dts_x)
+                    profile.contains("MA", true) -> resources.getString(R.string.dts_hd_ma)
+                    profile.contains("HD", true) -> resources.getString(R.string.dts_hd)
+                    else -> resources.getString(R.string.dts)
+                }
+            }
+
+            else -> {
+                when (codec?.lowercase()) {
+                    Codec.Audio.TRUEHD -> resources.getString(R.string.truehd)
+
+                    Codec.Audio.AC3 -> resources.getString(R.string.dolby_digital)
+
+                    Codec.Audio.EAC3 -> resources.getString(R.string.dolby_digital_plus)
+
+                    Codec.Audio.DCA -> resources.getString(R.string.dts)
+
+                    Codec.Audio.OGG,
+                    Codec.Audio.OPUS,
+                    Codec.Audio.VORBIS,
+                    -> codec.replaceFirstChar { it.uppercase() }
+
+                    null -> null
+
+                    else -> codec.uppercase()
+                }
+            }
+        }
+
+    fun formatSubtitleCodec(codec: String?): String? =
+        when (codec?.lowercase()) {
+            Codec.Subtitle.DVBSUB -> "DVB"
+            Codec.Subtitle.DVDSUB -> "DVD"
+            Codec.Subtitle.PGSSUB -> "PGS"
+            Codec.Subtitle.SUBRIP -> "SRT"
+            null -> null
+            else -> codec.uppercase()
+        }
+
+    fun String?.concatWithSpace(str: String?): String? =
+        when {
+            this != null && str != null -> "$this $str"
+            this == null -> str
+            else -> this
+        }
+
+    fun mediaStreamDisplayTitle(
+        resources: Resources,
+        stream: MediaStream,
+        includeFlags: Boolean,
+    ): String {
+        val name =
+            buildList {
+                add(languageName(stream.language))
+                if (stream.type == MediaStreamType.AUDIO) {
+                    add(formatAudioCodec(resources, stream.codec, stream.profile))
+                    add(stream.channelLayout)
+                } else if (stream.type == MediaStreamType.SUBTITLE) {
+                    "SDH".takeIf { stream.isHearingImpaired }?.let(::add)
+                    add(formatSubtitleCodec(stream.codec))
+                }
+            }.joinToString(" ")
+        if (includeFlags) {
+            val flags =
+                buildList {
+                    if (stream.isDefault) add(stream.localizedDefault)
+                    if (stream.isForced) add(stream.localizedForced)
+                    if (stream.isExternal) add(stream.localizedExternal)
+                }.joinToString(", ")
+            if (flags.isNotEmpty()) {
+                return "$name ($flags)"
+            }
+        }
+        return name
+    }
+}

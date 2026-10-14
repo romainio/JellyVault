@@ -1,0 +1,31 @@
+package tv.jellyvault.app.ui.components
+
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.padding
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.tv.material3.MaterialTheme
+import androidx.tv.material3.Text
+import tv.jellyvault.app.ui.util.LocalClock
+
+/**
+ * Displays the [LocalClock] in the upper right corner of the parent [androidx.compose.foundation.layout.Box]
+ */
+@Composable
+fun BoxScope.TimeDisplay(modifier: Modifier = Modifier) {
+    val timeString by LocalClock.current.timeString
+    Text(
+        text = timeString,
+        fontSize = 18.sp,
+        color = MaterialTheme.colorScheme.onSurface,
+        style = MaterialTheme.typography.bodyLarge,
+        modifier =
+            modifier
+                .align(Alignment.TopEnd)
+                .padding(vertical = 16.dp, horizontal = 24.dp),
+    )
+}

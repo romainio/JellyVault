@@ -1,0 +1,563 @@
+package tv.jellyvault.app.ui.detail
+
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import androidx.tv.material3.MaterialTheme
+import androidx.tv.material3.Text
+import androidx.tv.material3.surfaceColorAtElevation
+import coil3.compose.AsyncImage
+import dagger.assisted.Assisted
+import dagger.assisted.AssistedFactory
+import dagger.assisted.AssistedInject
+import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.update
+import org.jellyfin.sdk.api.client.ApiClient
+import org.jellyfin.sdk.api.client.extensions.userLibraryApi
+import org.jellyfin.sdk.model.api.BaseItemKind
+import org.jellyfin.sdk.model.api.ImageType
+import org.jellyfin.sdk.model.api.ItemSortBy
+import org.jellyfin.sdk.model.api.SortOrder
+import org.jellyfin.sdk.model.api.request.GetItemsRequest
+import timber.log.Timber
+import tv.jellyvault.app.R
+import tv.jellyvault.app.data.model.BaseItem
+import tv.jellyvault.app.preferences.UserPreferences
+import tv.jellyvault.app.services.FavoriteWatchManager
+import tv.jellyvault.app.services.NavigationManager
+import tv.jellyvault.app.ui.AspectRatios
+import tv.jellyvault.app.ui.Cards
+import tv.jellyvault.app.ui.ItemRowFields
+import tv.jellyvault.app.ui.LocalImageUrlService
+import tv.jellyvault.app.ui.PreviewTvSpec
+import tv.jellyvault.app.ui.cards.SeasonCard
+import tv.jellyvault.app.ui.components.ErrorMessage
+import tv.jellyvault.app.ui.components.ExpandableFaButton
+import tv.jellyvault.app.ui.components.LoadingPage
+import tv.jellyvault.app.ui.components.LoadingRow
+import tv.jellyvault.app.ui.components.OverviewText
+import tv.jellyvault.app.ui.data.ItemDetailsDialog
+import tv.jellyvault.app.ui.data.ItemDetailsDialogInfo
+import tv.jellyvault.app.ui.data.RowColumn
+import tv.jellyvault.app.ui.formatDate
+import tv.jellyvault.app.ui.ifElse
+import tv.jellyvault.app.ui.isNotNullOrBlank
+import tv.jellyvault.app.ui.launchIO
+import tv.jellyvault.app.ui.nav.Destination
+import tv.jellyvault.app.ui.rememberPosition
+import tv.jellyvault.app.ui.theme.JellyVaultTheme
+import tv.jellyvault.app.ui.theme.jv.JvColors
+import tv.jellyvault.app.ui.tryRequestFocus
+import tv.jellyvault.app.util.ApiRequestPager
+import tv.jellyvault.app.util.DataLoadingState
+import tv.jellyvault.app.util.GetItemsRequestHandler
+import tv.jellyvault.app.util.RowLoadingState
+import java.time.LocalDate
+import java.util.UUID
+
+@HiltViewModel(assistedFactory = PersonViewModel.Factory::class)
+class PersonViewModel
+    @AssistedInject
+    constructor(
+        private val api: ApiClient,
+        val navigationManager: NavigationManager,
+        private val favoriteWatchManager: FavoriteWatchManager,
+        @Assisted val itemId: UUID,
+    ) : ViewModel() {
+        @AssistedFactory
+        interface Factory {
+            fun create(itemId: UUID): PersonViewModel
+        }
+
+        private val _state = MutableStateFlow(PersonState())
+        val state: StateFlow<PersonState> = _state
+
+        private suspend fun updatePerson(): BaseItem {
+            val person =
+                api.userLibraryApi
+                    .getItem(itemId)
+                    .content
+                    .let { BaseItem(it) }
+            _state.update {
+                it.copy(
+                    person = DataLoadingState.Success(person),
+                )
+            }
+            return person
+        }
+
+        init {
+            viewModelScope.launchIO {
+                try {
+                    val person = updatePerson()
+                    val dto = person.data
+                    if ((dto.movieCount ?: 0) > 0) {
+                        fetchRow(person.id, BaseItemKind.MOVIE) { state, row ->
+                            state.copy(movies = row)
+                        }
+                    } else {
+                        _state.update { it.copy(movies = RowLoadingState.Success(emptyList())) }
+                    }
+                    if ((dto.seriesCount ?: 0) > 0) {
+                        fetchRow(person.id, BaseItemKind.SERIES) { state, row ->
+                            state.copy(series = row)
+                        }
+                    } else {
+                        _state.update { it.copy(series = RowLoadingState.Success(emptyList())) }
+                    }
+                    if ((dto.episodeCount ?: 0) > 0) {
+                        fetchRow(person.id, BaseItemKind.EPISODE) { state, row ->
+                            state.copy(episodes = row)
+                        }
+                    } else {
+                        _state.update { it.copy(episodes = RowLoadingState.Success(emptyList())) }
+                    }
+                } catch (ex: Exception) {
+                    Timber.e(ex, "Error fetching person %s", itemId)
+                    _state.update { it.copy(person = DataLoadingState.Error(ex)) }
+                }
+            }
+        }
+
+        private fun fetchRow(
+            itemId: UUID,
+            type: BaseItemKind,
+            update: (PersonState, RowLoadingState) -> PersonState,
+        ) {
+            viewModelScope.launchIO {
+                _state.update {
+                    update.invoke(it, RowLoadingState.Loading)
+                }
+                try {
+                    val request =
+                        GetItemsRequest(
+                            personIds = listOf(itemId),
+                            includeItemTypes = listOf(type),
+                            fields = ItemRowFields,
+                            recursive = true,
+                            sortBy = listOf(ItemSortBy.PREMIERE_DATE, ItemSortBy.PRODUCTION_YEAR, ItemSortBy.SORT_NAME),
+                            sortOrder = listOf(SortOrder.DESCENDING, SortOrder.DESCENDING, SortOrder.ASCENDING),
+                        )
+                    val pager =
+                        ApiRequestPager(
+                            api,
+                            request,
+                            GetItemsRequestHandler,
+                            viewModelScope,
+                            pageSize = 15,
+                            useSeriesForPrimary = false,
+                        ).init()
+                    _state.update {
+                        update.invoke(it, RowLoadingState.Success(pager))
+                    }
+                } catch (ex: Exception) {
+                    Timber.e(ex, "Error fetching $type for $itemId")
+                    _state.update {
+                        update.invoke(it, RowLoadingState.Error(ex))
+                    }
+                }
+            }
+        }
+
+        fun setFavorite(favorite: Boolean) {
+            viewModelScope.launchIO {
+                favoriteWatchManager.setFavorite(itemId, favorite)
+                updatePerson()
+            }
+        }
+    }
+
+data class PersonState(
+    val person: DataLoadingState<BaseItem> = DataLoadingState.Pending,
+    val movies: RowLoadingState = RowLoadingState.Pending,
+    val series: RowLoadingState = RowLoadingState.Pending,
+    val episodes: RowLoadingState = RowLoadingState.Pending,
+)
+
+@Composable
+fun PersonPage(
+    preferences: UserPreferences,
+    destination: Destination.MediaItem,
+    modifier: Modifier = Modifier,
+    viewModel: PersonViewModel =
+        hiltViewModel<PersonViewModel, PersonViewModel.Factory>(
+            creationCallback = { it.create(destination.itemId) },
+        ),
+) {
+    val state by viewModel.state.collectAsState()
+    when (val st = state.person) {
+        is DataLoadingState.Error -> {
+            ErrorMessage(st, modifier)
+        }
+
+        DataLoadingState.Loading,
+        DataLoadingState.Pending,
+        -> {
+            LoadingPage(modifier)
+        }
+
+        is DataLoadingState.Success<BaseItem> -> {
+            val person = st.data
+            var showOverviewDialog by remember { mutableStateOf(false) }
+            val name = remember(person) { person.name ?: person.id.toString() }
+            val imageUrlService = LocalImageUrlService.current
+            val imageUrl =
+                remember {
+                    imageUrlService.getItemImageUrl(
+                        itemId = person.id,
+                        imageType = ImageType.PRIMARY,
+                    )
+                }
+
+            PersonPageContent(
+                preferences = preferences,
+                name = name,
+                overview = person.data.overview,
+                imageUrl = imageUrl,
+                birthdate = person.data.premiereDate?.toLocalDate(),
+                deathdate = person.data.endDate?.toLocalDate(),
+                birthPlace = person.data.productionLocations?.firstOrNull(),
+                favorite = person.favorite,
+                movies = state.movies,
+                series = state.series,
+                episodes = state.episodes,
+                onClickItem = { index, item ->
+                    viewModel.navigationManager.navigateTo(item.destination())
+                },
+                overviewOnClick = { showOverviewDialog = true },
+                favoriteOnClick = {
+                    viewModel.setFavorite(!person.favorite)
+                },
+                modifier = modifier,
+            )
+            AnimatedVisibility(showOverviewDialog) {
+                ItemDetailsDialog(
+                    info =
+                        ItemDetailsDialogInfo(
+                            title = name,
+                            overview = person.data.overview,
+                            genres = listOf(),
+                            files = listOf(),
+                        ),
+                    showFilePath = false,
+                    onDismissRequest = { showOverviewDialog = false },
+                )
+            }
+        }
+    }
+}
+
+private const val HEADER_ROW = 0
+private const val MOVIE_ROW = 1
+private const val SERIES_ROW = 2
+private const val EPISODE_ROW = 3
+
+@Composable
+fun PersonPageContent(
+    preferences: UserPreferences,
+    name: String,
+    overview: String?,
+    imageUrl: String?,
+    birthdate: LocalDate?,
+    deathdate: LocalDate?,
+    birthPlace: String?,
+    favorite: Boolean,
+    movies: RowLoadingState,
+    series: RowLoadingState,
+    episodes: RowLoadingState,
+    onClickItem: (Int, BaseItem) -> Unit,
+    overviewOnClick: () -> Unit,
+    favoriteOnClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val focusRequester = remember { FocusRequester() }
+    val headerFocusRequester = remember { FocusRequester() }
+    var position by rememberPosition()
+    LaunchedEffect(Unit) {
+        if (position.row > HEADER_ROW) {
+            focusRequester.tryRequestFocus()
+        } else {
+            headerFocusRequester.tryRequestFocus()
+        }
+    }
+    var focusedOnHeader by remember { mutableStateOf(true) }
+    LazyColumn(
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+        userScrollEnabled = !focusedOnHeader,
+        modifier = modifier,
+    ) {
+        item {
+            PersonHeader(
+                name = name,
+                overview = overview,
+                imageUrl = imageUrl,
+                birthdate = birthdate,
+                birthPlace = birthPlace,
+                deathdate = deathdate,
+                favorite = favorite,
+                overviewOnClick = overviewOnClick,
+                favoriteOnClick = favoriteOnClick,
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 480.dp)
+                        .padding(top = 16.dp, bottom = 40.dp)
+                        .focusRequester(headerFocusRequester)
+                        .onFocusChanged {
+                            focusedOnHeader = it.hasFocus
+                        },
+            )
+        }
+        item {
+            LoadingRow(
+                title = rowTitle(stringResource(R.string.movies_title), movies),
+                state = movies,
+                rowIndex = MOVIE_ROW,
+                position = position,
+                focusRequester = focusRequester,
+                onClickItem = onClickItem,
+                onClickPosition = { position = it },
+                showIfEmpty = false,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        item {
+            LoadingRow(
+                title = rowTitle(stringResource(R.string.tv_shows_title), series),
+                state = series,
+                rowIndex = SERIES_ROW,
+                position = position,
+                focusRequester = focusRequester,
+                onClickItem = onClickItem,
+                onClickPosition = { position = it },
+                showIfEmpty = false,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        item {
+            LoadingRow(
+                title = rowTitle(stringResource(R.string.episodes), episodes),
+                state = episodes,
+                rowIndex = EPISODE_ROW,
+                position = position,
+                focusRequester = focusRequester,
+                onClickItem = onClickItem,
+                onClickPosition = { position = it },
+                showIfEmpty = false,
+                horizontalPadding = 24.dp,
+                modifier = Modifier.fillMaxWidth(),
+                cardContent = { index, item, mod, onClick, onLongClick ->
+                    SeasonCard(
+                        item = item,
+                        onClick = {
+                            position = RowColumn(EPISODE_ROW, index)
+                            onClick.invoke()
+                        },
+                        onLongClick = onLongClick,
+                        imageHeight = Cards.heightEpisode,
+                        aspectRatio = item?.aspectRatio ?: AspectRatios.FOUR_THREE,
+                        modifier =
+                            mod
+                                .ifElse(
+                                    position.row == EPISODE_ROW && position.column == index,
+                                    Modifier.focusRequester(focusRequester),
+                                ),
+                    )
+                },
+            )
+        }
+    }
+}
+
+fun rowTitle(
+    prefix: String,
+    state: RowLoadingState,
+): String =
+    if (state is RowLoadingState.Success) {
+        "$prefix (${state.items.size})"
+    } else {
+        prefix
+    }
+
+@Composable
+fun PersonHeader(
+    name: String,
+    overview: String?,
+    imageUrl: String?,
+    birthdate: LocalDate?,
+    deathdate: LocalDate?,
+    birthPlace: String?,
+    favorite: Boolean,
+    overviewOnClick: () -> Unit,
+    favoriteOnClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val bringIntoViewRequester = remember { BringIntoViewRequester() }
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(32.dp),
+        modifier = modifier.bringIntoViewRequester(bringIntoViewRequester),
+    ) {
+        AsyncImage(
+            model = imageUrl,
+            contentDescription = name,
+            modifier =
+                Modifier
+//                    .fillMaxWidth(.25f)
+                    .weight(1f)
+                    .clip(RoundedCornerShape(10)),
+        )
+        Column(
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier =
+                Modifier
+//                    .fillMaxWidth(.7f)
+                    .weight(3f)
+                    .padding(top = 16.dp, end = 32.dp)
+                    .background(
+                        MaterialTheme.colorScheme.surfaceColorAtElevation(1.dp),
+                        RoundedCornerShape(10),
+                    ).padding(16.dp),
+        ) {
+            Text(
+                text = name,
+                color = MaterialTheme.colorScheme.onSurface,
+                style = MaterialTheme.typography.displaySmall,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
+            birthdate?.let {
+                val age = if (deathdate == null) birthdate.until(LocalDate.now())?.years else null
+                val text =
+                    if (age != null) {
+                        stringResource(R.string.born) + ": ${formatDate(it)} (${
+                            pluralStringResource(
+                                R.plurals.years_old,
+                                age,
+                                age,
+                            )
+                        })"
+                    } else {
+                        stringResource(R.string.born) + ": ${formatDate(it)}"
+                    }
+                Text(
+                    text = text,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    style = MaterialTheme.typography.titleSmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (birthPlace.isNotNullOrBlank()) {
+                Text(
+                    text = stringResource(R.string.birthplace) + ": $birthPlace",
+                    color = MaterialTheme.colorScheme.onSurface,
+                    style = MaterialTheme.typography.titleSmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            deathdate?.let {
+                val age = birthdate?.until(it)?.years
+                val text =
+                    if (age != null) {
+                        stringResource(R.string.died) + ": ${formatDate(it)} (${
+                            pluralStringResource(
+                                R.plurals.years_old,
+                                age,
+                                age,
+                            )
+                        })"
+                    } else {
+                        stringResource(R.string.died) + ": ${formatDate(it)}"
+                    }
+                Text(
+                    text = text,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    style = MaterialTheme.typography.titleSmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            val interactionSource = remember { MutableInteractionSource() }
+            val buttonInteractionSource = remember { MutableInteractionSource() }
+            val focused =
+                interactionSource.collectIsFocusedAsState().value ||
+                    buttonInteractionSource.collectIsFocusedAsState().value
+            LaunchedEffect(focused) {
+                if (focused) {
+                    bringIntoViewRequester.bringIntoView()
+                }
+            }
+            OverviewText(
+                overview = overview ?: "",
+                maxLines = 3,
+                onClick = overviewOnClick,
+                interactionSource = interactionSource,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+            ExpandableFaButton(
+                title = if (favorite) R.string.remove_favorite else R.string.add_favorite,
+                iconStringRes = R.string.fa_heart,
+                onClick = favoriteOnClick,
+                iconColor = if (favorite) JvColors.Heart else Color.Unspecified,
+                interactionSource = buttonInteractionSource,
+                modifier = Modifier,
+            )
+        }
+    }
+}
+
+@PreviewTvSpec
+@Composable
+private fun PersonPreview() {
+    JellyVaultTheme {
+        PersonHeader(
+            name = "John Smith",
+            overview = "John Smith is an actor",
+            imageUrl = null,
+            birthdate = LocalDate.of(1975, 3, 22),
+            birthPlace = "Phoenix, Arizona, USA",
+            deathdate = LocalDate.of(2025, 2, 1),
+            overviewOnClick = {},
+            favorite = true,
+            favoriteOnClick = {},
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+}

@@ -1,0 +1,3 @@
+[{"title": "Breaking Bad", "tvdbId": 81189, "year": 2008, "titleSlug": "breaking-bad",
+  "images": [{"coverType": "poster", "remoteUrl": "https://artworks.example.test/p.jpg"}],
+  "seasons": [{"seasonNumber": 0, "monitored": false}, {"seasonNumber": 1, "monitored": false}, {"seasonNumber": 2, "monitored": false}]}]

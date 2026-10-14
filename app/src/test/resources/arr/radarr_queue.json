@@ -1,0 +1,4 @@
+{"page": 1, "pageSize": 200, "totalRecords": 2, "records": [
+  {"movieId": 12, "size": 1000.0, "sizeleft": 250.0, "status": "downloading"},
+  {"movieId": 99, "size": 0, "sizeleft": 0, "status": "queued"}
+]}

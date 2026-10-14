@@ -1,0 +1,519 @@
+package tv.jellyvault.app.ui.playback
+
+import android.view.Gravity
+import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.DialogWindowProvider
+import androidx.tv.material3.ListItem
+import androidx.tv.material3.MaterialTheme
+import androidx.tv.material3.Text
+import androidx.tv.material3.surfaceColorAtElevation
+import kotlinx.coroutines.launch
+import tv.jellyvault.app.R
+import tv.jellyvault.app.data.model.TrackIndex
+import tv.jellyvault.app.ui.AppColors
+import tv.jellyvault.app.ui.components.SelectedLeadingContent
+import tv.jellyvault.app.ui.indexOfFirstOrNull
+import tv.jellyvault.app.ui.playback.overlay.BottomDialog
+import tv.jellyvault.app.ui.playback.overlay.BottomDialogItem
+import tv.jellyvault.app.ui.playback.overlay.PlaybackAction
+import tv.jellyvault.app.ui.tryRequestFocus
+import kotlin.time.Duration
+
+enum class PlaybackDialogType {
+    DEBUG,
+    CAPTIONS,
+    SETTINGS,
+    AUDIO,
+    PLAYBACK_SPEED,
+    VIDEO_SCALE,
+    SUBTITLE_DELAY,
+}
+
+data class PlaybackSettings(
+    val showDebugInfo: Boolean,
+    val audioIndex: Int?,
+    val audioStreams: List<SimpleMediaStream>,
+    val subtitleIndex: Int?,
+    val subtitleStreams: List<SimpleMediaStream>,
+    val playbackSpeed: Float,
+    val contentScale: ContentScale,
+    val subtitleDelay: Duration,
+    val hasSubtitleDownloadPermission: Boolean,
+    val playbackSpeedEnabled: Boolean,
+)
+
+/**
+ * Centralized UI component for displaying dialogs during playback
+ *
+ * Typically, the user will click something generating a [tv.jellyvault.app.ui.playback.overlay.PlaybackAction] which translates into the
+ * [PlaybackDialogType] determining which dialog is shown by this component.
+ *
+ * @see tv.jellyvault.app.ui.playback.overlay.PlaybackAction
+ */
+@Composable
+fun PlaybackDialog(
+    enableSubtitleDelay: Boolean,
+    enableVideoScale: Boolean,
+    type: PlaybackDialogType,
+    settings: PlaybackSettings,
+    onDismissRequest: () -> Unit,
+    onControllerInteraction: () -> Unit,
+    onClickPlaybackDialogType: (PlaybackDialogType) -> Unit,
+    onPlaybackActionClick: (PlaybackAction) -> Unit,
+    onChangeSubtitleDelay: (Duration) -> Unit,
+) {
+    val isLtr = LocalLayoutDirection.current == LayoutDirection.Ltr
+    // TODO, shouldn't this work out of the box?
+    val leftGravity = remember(isLtr) { if (isLtr) Gravity.START else Gravity.END }
+    val rightGravity = remember(isLtr) { if (isLtr) Gravity.END else Gravity.START }
+    when (type) {
+        PlaybackDialogType.DEBUG -> {
+            throw IllegalStateException("Should not open a dialog with " + PlaybackDialogType.DEBUG)
+        }
+
+        PlaybackDialogType.CAPTIONS -> {
+            SubtitleChoiceBottomDialog(
+                choices = settings.subtitleStreams,
+                currentChoice = settings.subtitleIndex,
+                hasDownloadPermission = settings.hasSubtitleDownloadPermission,
+                onDismissRequest = {
+                    onControllerInteraction.invoke()
+                    onDismissRequest.invoke()
+                },
+                onSelectChoice = { subtitleIndex ->
+                    onDismissRequest.invoke()
+                    if (subtitleIndex >= 0) {
+                        onPlaybackActionClick.invoke(PlaybackAction.ToggleCaptions(subtitleIndex))
+                    } else if (subtitleIndex == TrackIndex.DISABLED) {
+                        onPlaybackActionClick.invoke(PlaybackAction.ToggleCaptions(TrackIndex.DISABLED))
+                    } else if (subtitleIndex == TrackIndex.ONLY_FORCED) {
+                        onPlaybackActionClick.invoke(PlaybackAction.ToggleCaptions(TrackIndex.ONLY_FORCED))
+                    }
+                },
+                onSelectSearch = {
+                    onDismissRequest.invoke()
+                    onPlaybackActionClick.invoke(PlaybackAction.SearchCaptions)
+                },
+                gravity = rightGravity,
+            )
+        }
+
+        PlaybackDialogType.SETTINGS -> {
+            val options =
+                buildList {
+                    add(
+                        BottomDialogItem(
+                            data = PlaybackDialogType.PLAYBACK_SPEED,
+                            headline = stringResource(R.string.playback_speed),
+                            supporting = settings.playbackSpeed.toString(),
+                            enabled = settings.playbackSpeedEnabled,
+                        ),
+                    )
+                    if (enableVideoScale) {
+                        add(
+                            BottomDialogItem(
+                                data = PlaybackDialogType.VIDEO_SCALE,
+                                headline = stringResource(R.string.video_scale),
+                                supporting =
+                                    playbackScaleOptions[settings.contentScale]
+                                        ?.let { stringResource(it) },
+                            ),
+                        )
+                    }
+                    if (enableSubtitleDelay) {
+                        add(
+                            BottomDialogItem(
+                                data = PlaybackDialogType.SUBTITLE_DELAY,
+                                headline = stringResource(R.string.subtitle_delay),
+                                supporting = settings.subtitleDelay.toString(),
+                            ),
+                        )
+                    }
+                    add(
+                        BottomDialogItem(
+                            data = PlaybackDialogType.DEBUG,
+                            headline = stringResource(if (settings.showDebugInfo) R.string.hide_debug_info else R.string.show_debug_info),
+                            supporting = null,
+                        ),
+                    )
+                }
+            BottomDialog(
+                choices = options,
+                currentChoice = null,
+                onDismissRequest = onDismissRequest,
+                onSelectChoice = { _, choice ->
+                    if (choice.data == PlaybackDialogType.DEBUG) {
+                        onPlaybackActionClick.invoke(PlaybackAction.ShowDebug)
+                    } else {
+                        onClickPlaybackDialogType(choice.data)
+                    }
+                },
+                gravity = leftGravity,
+            )
+        }
+
+        PlaybackDialogType.AUDIO -> {
+            StreamChoiceBottomDialog(
+                choices = settings.audioStreams,
+                currentChoice = settings.audioIndex,
+                onDismissRequest = {
+                    onControllerInteraction.invoke()
+                    onDismissRequest.invoke()
+                },
+                onSelectChoice = { _, choice ->
+                    onPlaybackActionClick.invoke(PlaybackAction.ToggleAudio(choice.index))
+                },
+                gravity = rightGravity,
+            )
+        }
+
+        PlaybackDialogType.PLAYBACK_SPEED -> {
+            val choices =
+                playbackSpeedOptions.map {
+                    BottomDialogItem(
+                        data = it.toFloat(),
+                        headline = it,
+                        supporting = null,
+                    )
+                }
+            BottomDialog(
+                choices = choices,
+                currentChoice = choices.firstOrNull { it.data == settings.playbackSpeed },
+                onDismissRequest = {
+                    onControllerInteraction.invoke()
+                    onDismissRequest.invoke()
+                },
+                onSelectChoice = { _, value ->
+                    onPlaybackActionClick.invoke(PlaybackAction.PlaybackSpeed(value.data))
+                },
+                gravity = leftGravity,
+            )
+        }
+
+        PlaybackDialogType.VIDEO_SCALE -> {
+            val choices =
+                playbackScaleOptions.map { (scale, name) ->
+                    BottomDialogItem(
+                        data = scale,
+                        headline = stringResource(name),
+                        supporting = null,
+                    )
+                }
+            BottomDialog(
+                choices = choices,
+                currentChoice = choices.firstOrNull { it.data == settings.contentScale },
+                onDismissRequest = {
+                    onControllerInteraction.invoke()
+                    onDismissRequest.invoke()
+                },
+                onSelectChoice = { _, choice ->
+                    onPlaybackActionClick.invoke(PlaybackAction.Scale(choice.data))
+                },
+                gravity = leftGravity,
+            )
+        }
+
+        PlaybackDialogType.SUBTITLE_DELAY -> {
+            Dialog(
+                onDismissRequest = onDismissRequest,
+                properties = DialogProperties(usePlatformDefaultWidth = false),
+            ) {
+                val dialogWindowProvider = LocalView.current.parent as? DialogWindowProvider
+                dialogWindowProvider?.window?.setDimAmount(0f)
+
+                Box(
+                    modifier =
+                        Modifier
+                            .wrapContentSize()
+                            .background(
+                                AppColors.TransparentBlack50,
+                                shape = RoundedCornerShape(16.dp),
+                            ),
+                ) {
+                    SubtitleDelay(
+                        delay = settings.subtitleDelay,
+                        onChangeDelay = onChangeSubtitleDelay,
+                        modifier = Modifier.padding(8.dp),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun SubtitleChoiceBottomDialog(
+    choices: List<SimpleMediaStream>,
+    onDismissRequest: () -> Unit,
+    onSelectChoice: (Int) -> Unit,
+    onSelectSearch: () -> Unit,
+    gravity: Int,
+    hasDownloadPermission: Boolean,
+    currentChoice: Int? = null,
+) {
+    val numberBefore = 2
+    val initialChoice =
+        remember(choices) {
+            choices.indexOfFirstOrNull { it.index == currentChoice }
+        }
+    val scope = rememberCoroutineScope()
+    val listState =
+        rememberLazyListState(
+            initialFirstVisibleItemIndex = initialChoice?.plus(numberBefore) ?: 0,
+        )
+    val firstFocusRequester = remember { FocusRequester() }
+    val lastFocusRequester = remember { FocusRequester() }
+    val choiceFocusRequesters = remember(choices.size) { List(choices.size) { FocusRequester() } }
+    LaunchedEffect(Unit) {
+        val focusRequester =
+            initialChoice?.let { choiceFocusRequesters.getOrNull(it) } ?: firstFocusRequester
+        focusRequester.tryRequestFocus()
+    }
+    // TODO enforcing a width ends up ignore the gravity
+    Dialog(
+        onDismissRequest = onDismissRequest,
+        properties = DialogProperties(usePlatformDefaultWidth = true),
+    ) {
+        val dialogWindowProvider = LocalView.current.parent as? DialogWindowProvider
+        dialogWindowProvider?.window?.let { window ->
+            window.setGravity(Gravity.BOTTOM or gravity) // Move down, by default dialogs are in the centre
+            window.setDimAmount(0f) // Remove dimmed background of ongoing playback
+        }
+
+        Box(
+            modifier =
+                Modifier
+                    .wrapContentSize()
+                    .padding(8.dp)
+                    .background(
+                        MaterialTheme.colorScheme.surfaceColorAtElevation(3.dp),
+                        shape = RoundedCornerShape(8.dp),
+                    ),
+        ) {
+            LazyColumn(
+                state = listState,
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+//                        .widthIn(max = 240.dp)
+                        .wrapContentWidth(),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                item {
+                    val interactionSource = remember { MutableInteractionSource() }
+                    val focused by interactionSource.collectIsFocusedAsState()
+                    ListItem(
+                        selected = currentChoice == TrackIndex.DISABLED,
+                        interactionSource = interactionSource,
+                        onClick = {
+                            onSelectChoice(TrackIndex.DISABLED)
+                        },
+                        leadingContent = {
+                            SelectedLeadingContent(currentChoice == TrackIndex.DISABLED)
+                        },
+                        headlineContent = {
+                            Text(
+                                text = stringResource(R.string.none),
+                            )
+                        },
+                        supportingContent = {},
+                        modifier =
+                            Modifier
+                                .focusRequester(firstFocusRequester)
+                                .onKeyEvent {
+                                    if (focused && isUp(it) && it.type == KeyEventType.KeyDown) {
+                                        scope.launch {
+                                            listState.animateScrollToItem(Int.MAX_VALUE)
+                                            lastFocusRequester.tryRequestFocus()
+                                        }
+                                        return@onKeyEvent true
+                                    }
+                                    false
+                                },
+                    )
+                }
+                item {
+                    ListItem(
+                        selected = currentChoice == TrackIndex.ONLY_FORCED,
+                        onClick = {
+                            onSelectChoice(TrackIndex.ONLY_FORCED)
+                        },
+                        leadingContent = {
+                            SelectedLeadingContent(currentChoice == TrackIndex.ONLY_FORCED)
+                        },
+                        headlineContent = {
+                            Text(
+                                text = stringResource(R.string.only_forced_subtitles),
+                            )
+                        },
+                        supportingContent = {},
+                    )
+                    if (choices.isNotEmpty()) {
+                        HorizontalDivider()
+                    }
+                }
+                itemsIndexed(choices) { index, choice ->
+                    val interactionSource = remember { MutableInteractionSource() }
+                    ListItem(
+                        selected = choice.index == currentChoice,
+                        onClick = {
+                            onSelectChoice(choice.index)
+                        },
+                        leadingContent = {
+                            SelectedLeadingContent(choice.index == currentChoice)
+                        },
+                        headlineContent = {
+                            Text(
+                                text = choice.streamTitle ?: choice.displayTitle,
+                            )
+                        },
+                        supportingContent = {
+                            if (choice.streamTitle != null) Text(choice.displayTitle)
+                        },
+                        interactionSource = interactionSource,
+                        modifier = Modifier.focusRequester(choiceFocusRequesters[index]),
+                    )
+                }
+                item {
+                    HorizontalDivider()
+                    val interactionSource = remember { MutableInteractionSource() }
+                    val focused by interactionSource.collectIsFocusedAsState()
+                    ListItem(
+                        selected = false,
+                        enabled = hasDownloadPermission,
+                        onClick = onSelectSearch,
+                        leadingContent = {},
+                        headlineContent = {
+                            Text(
+                                text = stringResource(R.string.search_and_download),
+                            )
+                        },
+                        supportingContent = {},
+                        interactionSource = interactionSource,
+                        modifier =
+                            Modifier
+                                .focusRequester(lastFocusRequester)
+                                .onKeyEvent {
+                                    if (focused && isDown(it) && it.type == KeyEventType.KeyDown) {
+                                        scope.launch {
+                                            listState.animateScrollToItem(0)
+                                            firstFocusRequester.tryRequestFocus()
+                                        }
+                                        return@onKeyEvent true
+                                    }
+                                    false
+                                },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun StreamChoiceBottomDialog(
+    choices: List<SimpleMediaStream>,
+    onDismissRequest: () -> Unit,
+    onSelectChoice: (Int, SimpleMediaStream) -> Unit,
+    gravity: Int,
+    currentChoice: Int? = null,
+) {
+    val focusRequesters = remember(choices.size) { List(choices.size) { FocusRequester() } }
+    if (currentChoice != null) {
+        LaunchedEffect(Unit) {
+            choices.indexOfFirstOrNull { it.index == currentChoice }?.let {
+                focusRequesters.getOrNull(it)?.tryRequestFocus()
+            }
+        }
+    }
+    // TODO enforcing a width ends up ignore the gravity
+    Dialog(
+        onDismissRequest = onDismissRequest,
+        properties = DialogProperties(usePlatformDefaultWidth = true),
+    ) {
+        val dialogWindowProvider = LocalView.current.parent as? DialogWindowProvider
+        dialogWindowProvider?.window?.let { window ->
+            window.setGravity(Gravity.BOTTOM or gravity) // Move down, by default dialogs are in the centre
+            window.setDimAmount(0f) // Remove dimmed background of ongoing playback
+        }
+
+        Box(
+            modifier =
+                Modifier
+                    .wrapContentSize()
+                    .padding(8.dp)
+                    .background(
+                        MaterialTheme.colorScheme.surfaceColorAtElevation(3.dp),
+                        shape = RoundedCornerShape(8.dp),
+                    ),
+        ) {
+            LazyColumn(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+//                        .widthIn(max = 240.dp)
+                        .wrapContentWidth(),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                itemsIndexed(choices) { index, choice ->
+                    val interactionSource = remember { MutableInteractionSource() }
+                    ListItem(
+                        selected = choice.index == currentChoice,
+                        onClick = {
+                            onDismissRequest()
+                            onSelectChoice(index, choice)
+                        },
+                        leadingContent = {
+                            SelectedLeadingContent(choice.index == currentChoice)
+                        },
+                        headlineContent = {
+                            Text(
+                                text = choice.streamTitle ?: choice.displayTitle,
+                            )
+                        },
+                        supportingContent = {
+                            if (choice.streamTitle != null) Text(choice.displayTitle)
+                        },
+                        interactionSource = interactionSource,
+                        modifier = Modifier.focusRequester(focusRequesters[index]),
+                    )
+                }
+            }
+        }
+    }
+}

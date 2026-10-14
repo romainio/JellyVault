@@ -1,0 +1,132 @@
+package tv.jellyvault.app.data
+
+import androidx.annotation.PluralsRes
+import androidx.annotation.StringRes
+import org.jellyfin.sdk.model.UUID
+import org.jellyfin.sdk.model.api.ExtraType
+import org.jellyfin.sdk.model.api.ItemSortBy
+import org.jellyfin.sdk.model.api.SortOrder
+import org.jellyfin.sdk.model.api.request.GetItemsRequest
+import tv.jellyvault.app.R
+import tv.jellyvault.app.data.model.BaseItem
+import tv.jellyvault.app.ui.AspectRatio
+import tv.jellyvault.app.ui.components.ViewOptions
+import tv.jellyvault.app.ui.nav.Destination
+import tv.jellyvault.app.ui.util.ResStringProvider
+import tv.jellyvault.app.util.GetItemsRequestHandler
+
+/**
+ * Represents "extras" for media such as behind-the-scenes or deleted scenes
+ */
+sealed interface ExtrasItem {
+    val parentId: UUID
+    val type: ExtraType
+    val destination: Destination
+    val imageUrl: String?
+    val title: String
+    val subtitle: String?
+    val isPlayed: Boolean
+    val playedPercentage: Double
+    val aspectRatio: Float?
+
+    /**
+     * Represents multiple extras of the same type
+     */
+    data class Group(
+        override val parentId: UUID,
+        override val type: ExtraType,
+        val items: List<BaseItem>,
+        override val imageUrl: String?,
+        override val title: String,
+        override val subtitle: String,
+        override val isPlayed: Boolean,
+        override val aspectRatio: Float?,
+    ) : ExtrasItem {
+        override val destination: Destination =
+            Destination.ItemGrid(
+                title = ResStringProvider(type.stringRes),
+                request =
+                    GetItemsRequest(
+                        ids = items.map { it.id },
+                        sortBy = listOf(ItemSortBy.SORT_NAME),
+                        sortOrder = listOf(SortOrder.ASCENDING),
+                    ),
+                requestHandler = GetItemsRequestHandler,
+                initialPosition = 0,
+                viewOptions =
+                    ViewOptions(
+                        columns = 3,
+                        spacing = 24,
+                        aspectRatio = AspectRatio.WIDE,
+                    ),
+            )
+
+        override val playedPercentage
+            get() = -1.0
+    }
+
+    /**
+     * Represents a single extra
+     */
+    data class Single(
+        override val parentId: UUID,
+        override val type: ExtraType,
+        val item: BaseItem,
+        override val imageUrl: String?,
+        override val title: String,
+        override val subtitle: String?,
+    ) : ExtrasItem {
+        override val destination: Destination =
+            Destination.Playback(
+                item = item,
+            )
+        override val isPlayed: Boolean
+            get() = item.played
+        override val playedPercentage
+            get() = item.data.userData?.playedPercentage ?: 0.0
+        override val aspectRatio: Float?
+            get() = item.aspectRatio
+    }
+}
+
+/**
+ * Converts [ExtraType] to the string resource ID
+ */
+@get:StringRes
+val ExtraType.stringRes: Int
+    get() =
+        when (this) {
+            ExtraType.UNKNOWN -> R.string.other_extras_title
+            ExtraType.CLIP -> R.string.clips_title
+            ExtraType.TRAILER -> R.string.trailers_title
+            ExtraType.BEHIND_THE_SCENES -> R.string.behind_the_scenes_title
+            ExtraType.DELETED_SCENE -> R.string.deleted_scenes_title
+            ExtraType.INTERVIEW -> R.string.interviews_title
+            ExtraType.SCENE -> R.string.scenes_title
+            ExtraType.SAMPLE -> R.string.samples_title
+            ExtraType.THEME_SONG -> R.string.theme_songs_title
+            ExtraType.THEME_VIDEO -> R.string.theme_videos_title
+            ExtraType.FEATURETTE -> R.string.featurettes_title
+            ExtraType.SHORT -> R.string.shorts_title
+        }
+
+/**
+ * Converts [ExtraType] to the plural resource ID
+ */
+@get:PluralsRes
+val ExtraType.pluralRes: Int
+    get() =
+        when (this) {
+            ExtraType.UNKNOWN -> R.plurals.other_extras
+            ExtraType.CLIP -> R.plurals.clips
+            ExtraType.TRAILER -> R.plurals.trailers
+            ExtraType.BEHIND_THE_SCENES -> R.plurals.behind_the_scenes
+            ExtraType.DELETED_SCENE -> R.plurals.deleted_scenes
+            ExtraType.INTERVIEW -> R.plurals.interviews
+            ExtraType.SCENE -> R.plurals.scenes
+            ExtraType.SAMPLE -> R.plurals.samples
+            ExtraType.THEME_SONG -> R.plurals.theme_songs
+            ExtraType.THEME_VIDEO -> R.plurals.theme_videos
+            ExtraType.FEATURETTE -> R.plurals.featurettes
+            ExtraType.SHORT -> R.plurals.shorts
+        }

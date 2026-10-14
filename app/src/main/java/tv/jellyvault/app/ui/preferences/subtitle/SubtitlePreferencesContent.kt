@@ -1,0 +1,222 @@
+package tv.jellyvault.app.ui.preferences.subtitle
+
+import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.tv.material3.MaterialTheme
+import androidx.tv.material3.Text
+import androidx.tv.material3.surfaceColorAtElevation
+import kotlinx.coroutines.launch
+import tv.jellyvault.app.preferences.AppPreference
+import tv.jellyvault.app.preferences.SubtitlePreferences
+import tv.jellyvault.app.preferences.lazyListWrapScrolling
+import tv.jellyvault.app.preferences.resetSubtitles
+import tv.jellyvault.app.ui.ifElse
+import tv.jellyvault.app.ui.preferences.ClickPreference
+import tv.jellyvault.app.ui.preferences.ComposablePreference
+import tv.jellyvault.app.ui.preferences.PreferenceGroup
+import tv.jellyvault.app.ui.preferences.PreferenceValidation
+import tv.jellyvault.app.ui.preferences.PreferencesViewModel
+import tv.jellyvault.app.ui.tryRequestFocus
+import tv.jellyvault.app.util.ExceptionHandler
+
+@Composable
+fun SubtitlePreferencesContent(
+    title: String,
+    preferences: SubtitlePreferences,
+    prefList: List<PreferenceGroup<SubtitlePreferences>>,
+    onPreferenceChange: suspend (SubtitlePreferences) -> Unit,
+    modifier: Modifier = Modifier,
+    viewModel: PreferencesViewModel = hiltViewModel(),
+    onFocus: (Int, Int) -> Unit = { _, _ -> },
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val focusRequester = remember { FocusRequester() }
+    val firstFocusRequester = remember { FocusRequester() }
+    val lastFocusRequester = remember { FocusRequester() }
+    var focusedIndex by rememberSaveable { mutableStateOf(Pair(0, 0)) }
+    val state = rememberLazyListState()
+
+    var visible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        // Forces the animated to trigger
+        visible = true
+    }
+
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn() + slideInHorizontally { it / 2 },
+        exit = fadeOut() + slideOutHorizontally { it / 2 },
+        modifier = modifier,
+    ) {
+        LaunchedEffect(Unit) {
+            focusRequester.tryRequestFocus()
+        }
+        Column(
+            modifier = Modifier.background(MaterialTheme.colorScheme.surfaceColorAtElevation(1.dp)),
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.headlineSmall,
+                color = MaterialTheme.colorScheme.onSurface,
+                textAlign = TextAlign.Center,
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
+            )
+            LazyColumn(
+                state = state,
+                horizontalAlignment = Alignment.Start,
+                verticalArrangement = Arrangement.spacedBy(0.dp),
+                contentPadding = PaddingValues(16.dp),
+            ) {
+                prefList.forEachIndexed { groupIndex, group ->
+                    item {
+                        Text(
+                            text = stringResource(group.title),
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            textAlign = TextAlign.Start,
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 8.dp, bottom = 4.dp),
+                        )
+                    }
+                    val groupPreferences =
+                        group.preferences +
+                            group.conditionalPreferences
+                                .filter { it.condition.invoke(preferences) }
+                                .map { it.preferences }
+                                .flatten()
+                    groupPreferences.forEachIndexed { prefIndex, pref ->
+                        pref as AppPreference<SubtitlePreferences, Any>
+                        item {
+                            val isFirst = groupIndex == 0 && prefIndex == 0
+                            val isLast =
+                                groupIndex == prefList.lastIndex && prefIndex == groupPreferences.lastIndex
+                            val interactionSource = remember { MutableInteractionSource() }
+                            val bringIntoViewRequester = remember { BringIntoViewRequester() }
+                            val focused = interactionSource.collectIsFocusedAsState().value
+                            LaunchedEffect(focused) {
+                                if (focused) {
+                                    focusedIndex = Pair(groupIndex, prefIndex)
+                                    onFocus.invoke(groupIndex, prefIndex)
+                                }
+                            }
+                            if (preferences.useSeparateHdr && pref == SubtitleSettings.SeparateHdr) {
+                                LaunchedEffect(Unit) {
+                                    bringIntoViewRequester.bringIntoView()
+                                }
+                            }
+                            val focusModifier =
+                                Modifier
+                                    .ifElse(
+                                        groupIndex == focusedIndex.first && prefIndex == focusedIndex.second,
+                                        Modifier.focusRequester(focusRequester),
+                                    ).bringIntoViewRequester(bringIntoViewRequester)
+                                    .lazyListWrapScrolling(
+                                        state,
+                                        focused,
+                                        isFirst,
+                                        isLast,
+                                        firstFocusRequester,
+                                        lastFocusRequester,
+                                    )
+
+                            when (pref) {
+                                SubtitleSettings.Reset -> {
+                                    ClickPreference(
+                                        title = stringResource(pref.title),
+                                        onClick = {
+                                            scope.launch(ExceptionHandler()) {
+                                                val newValue =
+                                                    SubtitlePreferences
+                                                        .newBuilder()
+                                                        .apply { resetSubtitles() }
+                                                        .build()
+                                                onPreferenceChange.invoke(newValue)
+                                            }
+                                        },
+                                        interactionSource = interactionSource,
+                                        modifier = focusModifier,
+                                    )
+                                }
+
+                                else -> {
+                                    val value = pref.getter.invoke(preferences)
+                                    ComposablePreference(
+                                        preference = pref,
+                                        value = value,
+                                        onNavigate = viewModel.navigationManager::navigateTo,
+                                        onValueChange = { newValue ->
+                                            val validation = pref.validate(preferences, newValue)
+                                            when (validation) {
+                                                is PreferenceValidation.Invalid -> {
+                                                    // TODO?
+                                                    Toast
+                                                        .makeText(
+                                                            context,
+                                                            validation.message,
+                                                            Toast.LENGTH_SHORT,
+                                                        ).show()
+                                                }
+
+                                                PreferenceValidation.Valid -> {
+                                                    scope.launch(ExceptionHandler()) {
+                                                        onPreferenceChange.invoke(
+                                                            pref.setter(
+                                                                preferences,
+                                                                newValue,
+                                                            ),
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        interactionSource = interactionSource,
+                                        modifier = focusModifier,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

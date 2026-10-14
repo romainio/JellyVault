@@ -1,0 +1,237 @@
+package tv.jellyvault.app.ui.components
+
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.Stable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.times
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import dagger.assisted.Assisted
+import dagger.assisted.AssistedFactory
+import dagger.assisted.AssistedInject
+import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.withContext
+import org.jellyfin.sdk.api.client.ApiClient
+import org.jellyfin.sdk.api.client.extensions.userLibraryApi
+import org.jellyfin.sdk.model.api.BaseItemKind
+import org.jellyfin.sdk.model.api.ImageType
+import org.jellyfin.sdk.model.api.request.GetStudiosRequest
+import timber.log.Timber
+import tv.jellyvault.app.data.ServerRepository
+import tv.jellyvault.app.data.model.BaseItem
+import tv.jellyvault.app.data.model.alphabetSortName
+import tv.jellyvault.app.data.model.createStudioDestination
+import tv.jellyvault.app.services.ImageUrlService
+import tv.jellyvault.app.services.NavigationManager
+import tv.jellyvault.app.ui.OneTimeLaunchedEffect
+import tv.jellyvault.app.ui.SlimItemFields
+import tv.jellyvault.app.ui.cards.StudioCard
+import tv.jellyvault.app.ui.detail.CardGrid
+import tv.jellyvault.app.ui.detail.CardGridItem
+import tv.jellyvault.app.ui.launchIO
+import tv.jellyvault.app.ui.tryRequestFocus
+import tv.jellyvault.app.util.DataLoadingState
+import tv.jellyvault.app.util.GetStudiosRequestHandler
+import tv.jellyvault.app.util.JvDispatchers
+import java.util.UUID
+
+@HiltViewModel(assistedFactory = StudioViewModel.Factory::class)
+class StudioViewModel
+    @AssistedInject
+    constructor(
+        private val api: ApiClient,
+        private val imageUrlService: ImageUrlService,
+        private val serverRepository: ServerRepository,
+        val navigationManager: NavigationManager,
+        @Assisted private val itemId: UUID,
+        @Assisted private val includeItemTypes: List<BaseItemKind>?,
+    ) : ViewModel() {
+        @AssistedFactory
+        interface Factory {
+            fun create(
+                itemId: UUID,
+                includeItemTypes: List<BaseItemKind>?,
+            ): StudioViewModel
+        }
+
+        private val _state = MutableStateFlow(StudioGridState())
+        val state: StateFlow<StudioGridState> = _state
+
+        fun init(cardWidthPx: Int) {
+            _state.update { it.copy(item = DataLoadingState.Loading) }
+            viewModelScope.launchIO {
+                try {
+                    val item =
+                        api.userLibraryApi.getItem(itemId = itemId).content.let {
+                            BaseItem(it, false)
+                        }
+                    val request =
+                        GetStudiosRequest(
+                            userId = serverRepository.currentUser?.id,
+                            parentId = itemId,
+                            fields = SlimItemFields,
+                            includeItemTypes = includeItemTypes,
+                        )
+                    val studios =
+                        GetStudiosRequestHandler
+                            .execute(api, request)
+                            .content.items
+                            .map {
+                                val imageUrl =
+                                    imageUrlService.getItemImageUrl(
+                                        itemId = it.id,
+                                        imageType = ImageType.THUMB,
+                                        fillWidth = cardWidthPx,
+                                    )
+                                Studio(
+                                    id = it.id,
+                                    name = it.name ?: "",
+                                    imageUrl = imageUrl,
+                                    sortName = it.alphabetSortName,
+                                )
+                            }
+                    _state.update {
+                        it.copy(
+                            item = DataLoadingState.Success(item),
+                            studios = studios,
+                        )
+                    }
+                } catch (ex: Exception) {
+                    Timber.e(ex, "Error fetching studios")
+                    _state.update { it.copy(item = DataLoadingState.Error(ex)) }
+                }
+            }
+        }
+
+        suspend fun positionOfLetter(letter: Char): Int =
+            withContext(JvDispatchers.IO) {
+                GetStudiosRequestHandler.countMatching(
+                    api = api,
+                    request =
+                        GetStudiosRequest(
+                            userId = serverRepository.currentUser?.id,
+                            parentId = itemId,
+                            nameLessThan = letter.toString(),
+                            limit = 0,
+                            enableTotalRecordCount = true,
+                            includeItemTypes = includeItemTypes,
+                        ),
+                )
+            }
+    }
+
+@Stable
+data class Studio(
+    val id: UUID,
+    val name: String,
+    val imageUrl: String?,
+    override val sortName: String = name,
+) : CardGridItem {
+    override val gridId: String get() = id.toString()
+    override val playable: Boolean = false
+}
+
+data class StudioGridState(
+    val item: DataLoadingState<BaseItem> = DataLoadingState.Pending,
+    val studios: List<Studio> = emptyList(),
+)
+
+@Composable
+fun StudioCardGrid(
+    itemId: UUID,
+    includeItemTypes: List<BaseItemKind>?,
+    modifier: Modifier = Modifier,
+    initialPosition: Int = 0,
+    viewModel: StudioViewModel =
+        hiltViewModel<StudioViewModel, StudioViewModel.Factory>(
+            creationCallback = { it.create(itemId, includeItemTypes) },
+        ),
+) {
+    val columns = 4
+    val spacing = 16.dp
+    val density = LocalDensity.current
+    val configuration = LocalConfiguration.current
+    val cardWidthPx =
+        remember(density) {
+            with(density) {
+                // Grid has 16dp padding on either side & 16dp spacing between 4 cards
+                // This isn't exact though because it doesn't account for nav drawer or letters, but it's close and the calculation is much faster
+                // E.g. on 1080p, this results in 440px versus 395px actual, so only minimal scaling down is required
+                (configuration.screenWidthDp.dp - (2 * 16.dp + 3 * spacing))
+                    .div(columns)
+                    .roundToPx()
+            }
+        }
+    OneTimeLaunchedEffect {
+        viewModel.init(cardWidthPx)
+    }
+    val state by viewModel.state.collectAsState()
+
+    val gridFocusRequester = remember { FocusRequester() }
+    when (val st = state.item) {
+        DataLoadingState.Pending,
+        DataLoadingState.Loading,
+        -> {
+            LoadingPage(modifier.focusable())
+        }
+
+        is DataLoadingState.Error -> {
+            ErrorMessage(st, modifier.focusable())
+        }
+
+        is DataLoadingState.Success<BaseItem> -> {
+            Box(modifier = modifier) {
+                LaunchedEffect(Unit) { gridFocusRequester.tryRequestFocus() }
+                CardGrid(
+                    pager = state.studios,
+                    onClickItem = { _, studio ->
+                        viewModel.navigationManager.navigateTo(
+                            createStudioDestination(
+                                studioId = studio.id,
+                                name = studio.name,
+                                parentId = itemId,
+                                parentName = st.data.title,
+                                includeItemTypes = includeItemTypes,
+                            ),
+                        )
+                    },
+                    onLongClickItem = { _, _ -> },
+                    onClickPlay = { _, _ -> },
+                    letterPosition = { viewModel.positionOfLetter(it) },
+                    gridFocusRequester = gridFocusRequester,
+                    showJumpButtons = false,
+                    showLetterButtons = true,
+                    modifier = Modifier.fillMaxSize(),
+                    initialPosition = initialPosition,
+                    positionCallback = { columns, position ->
+                    },
+                    columns = columns,
+                    spacing = spacing,
+                    cardContent = { (item, index, onClick, onLongClick, widthPx, mod) ->
+                        StudioCard(
+                            studio = item,
+                            onClick = onClick,
+                            onLongClick = onLongClick,
+                            modifier = mod,
+                        )
+                    },
+                )
+            }
+        }
+    }
+}

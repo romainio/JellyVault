@@ -1,0 +1,101 @@
+package tv.jellyvault.app.ui.detail.episode
+
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.tv.material3.MaterialTheme
+import androidx.tv.material3.Text
+import org.jellyfin.sdk.model.api.PersonKind
+import tv.jellyvault.app.R
+import tv.jellyvault.app.data.ChosenStreams
+import tv.jellyvault.app.data.model.BaseItem
+import tv.jellyvault.app.preferences.UserPreferences
+import tv.jellyvault.app.ui.components.EpisodeName
+import tv.jellyvault.app.ui.components.OverviewText
+import tv.jellyvault.app.ui.components.QuickDetails
+import tv.jellyvault.app.ui.components.SeriesName
+import tv.jellyvault.app.ui.components.VideoStreamDetails
+import tv.jellyvault.app.ui.isNotNullOrBlank
+
+@Composable
+fun EpisodeDetailsHeader(
+    preferences: UserPreferences,
+    ep: BaseItem,
+    chosenStreams: ChosenStreams?,
+    bringIntoViewRequester: BringIntoViewRequester,
+    overviewOnClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val dto = ep.data
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    Column(
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = modifier,
+    ) {
+        SeriesName(dto.seriesName, Modifier.fillMaxWidth(.75f))
+        EpisodeName(dto, Modifier.fillMaxWidth(.75f))
+
+        Column(
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier.fillMaxWidth(.60f),
+        ) {
+            val padding = 8.dp
+            QuickDetails(ep.ui.quickDetails, ep.timeRemainingOrRuntime)
+
+            VideoStreamDetails(
+                chosenStreams = chosenStreams,
+                numberOfVersions = dto.mediaSourceCount ?: 0,
+                modifier = Modifier.padding(bottom = padding),
+            )
+            dto.taglines?.firstOrNull()?.let { tagline ->
+                Text(
+                    text = tagline,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontStyle = FontStyle.Italic,
+                    modifier = Modifier,
+                )
+            }
+
+            // Description
+            dto.overview?.let { overview ->
+                val interactionSource = remember { MutableInteractionSource() }
+                val focused = interactionSource.collectIsFocusedAsState().value
+                LaunchedEffect(focused) {
+                    if (focused) bringIntoViewRequester.bringIntoView()
+                }
+                OverviewText(
+                    overview = overview,
+                    maxLines = 3,
+                    onClick = overviewOnClick,
+                    textBoxHeight = Dp.Unspecified,
+                    interactionSource = interactionSource,
+                )
+            }
+            ep.data.people
+                ?.filter { it.type == PersonKind.DIRECTOR && it.name.isNotNullOrBlank() }
+                ?.joinToString(", ") { it.name!! }
+                ?.let {
+                    Text(
+                        text = stringResource(R.string.directed_by, it),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+        }
+    }
+}

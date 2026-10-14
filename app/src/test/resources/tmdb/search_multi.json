@@ -1,0 +1,6 @@
+{"page": 1, "total_pages": 3, "results": [
+  {"id": 863, "media_type": "movie", "title": "Toy Story 2", "poster_path": "/ts2.jpg", "release_date": "1999-10-30", "vote_average": 7.6, "genre_ids": [16]},
+  {"id": 1234, "media_type": "tv", "name": "Toy Story Toons", "poster_path": "/tst.jpg", "first_air_date": "2011-01-01", "genre_ids": [16]},
+  {"id": 31, "media_type": "person", "name": "Tom Hanks", "profile_path": "/th.jpg"},
+  {"id": 999, "media_type": "movie", "title": "Toy Story sans affiche", "poster_path": null}
+]}

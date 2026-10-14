@@ -1,0 +1,338 @@
+package tv.jellyvault.app.ui
+
+import android.content.Context
+import android.content.res.Resources
+import android.text.format.DateFormat
+import androidx.annotation.StringRes
+import androidx.compose.foundation.text.appendInlineContent
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.buildAnnotatedString
+import org.jellyfin.sdk.model.api.BaseItemDto
+import org.jellyfin.sdk.model.api.BaseItemKind
+import org.jellyfin.sdk.model.api.MediaSegmentType
+import timber.log.Timber
+import tv.jellyvault.app.JellyVaultApplication
+import tv.jellyvault.app.R
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.LocalTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.DateTimeParseException
+import java.time.format.FormatStyle
+import java.util.Date
+import java.util.Locale
+import kotlin.time.Duration
+
+/**
+ * Format the time-of-day of [time] honouring the device's 12/24-hour setting and the current
+ * locale. [context] should be an Activity/composition context (e.g. `LocalContext.current`) so an
+ * in-app language switch (`AppCompatDelegate.setApplicationLocales`) is reflected; the application
+ * context may carry a stale locale.
+ */
+fun formatTime(
+    context: Context,
+    time: LocalDateTime,
+): String = formatTime(context, time.toLocalTime())
+
+fun formatTime(
+    context: Context,
+    time: LocalTime,
+): String {
+    val instant =
+        time
+            .atDate(LocalDate.now())
+            .atZone(ZoneId.systemDefault())
+            .toInstant()
+    return DateFormat.getTimeFormat(context).format(Date.from(instant))
+}
+
+private var dateFormatter: DateTimeFormatter =
+    DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(Locale.getDefault())
+
+fun getDateFormatter(): DateTimeFormatter {
+    if (dateFormatter.locale != Locale.getDefault()) {
+        dateFormatter = dateFormatter.withLocale(Locale.getDefault())
+    }
+    return dateFormatter
+}
+
+// TODO server returns in UTC, but sdk converts to local time
+// eg 2020-02-14T00:00:00.0000000Z => 2020-02-13T17:00:00 PT => Feb 13, 2020
+
+/**
+ * Format a [LocalDateTime] as `Aug 24, 2000`
+ */
+fun formatDateTime(dateTime: LocalDateTime): String = getDateFormatter().format(dateTime)
+
+fun formatDate(dateTime: LocalDate): String = getDateFormatter().format(dateTime)
+
+fun formatDate(dateTime: LocalDateTime): String = getDateFormatter().format(dateTime)
+
+fun toLocalDate(date: String?): LocalDate? =
+    date?.let {
+        try {
+            LocalDate.parse(it)
+        } catch (_: DateTimeParseException) {
+            Timber.w("Could not parse date: %s", date)
+            null
+        }
+    }
+
+// Falls back to the default format if the application is not initialized (e.g. unit tests)
+private fun formatStringWithFallback(
+    @StringRes resId: Int,
+    defaultFormat: String,
+    vararg args: Any,
+): String {
+    val resources =
+        try {
+            JellyVaultApplication.instance.resources
+        } catch (_: UninitializedPropertyAccessException) {
+            null
+        }
+    return resources?.getString(resId, *args)
+        ?: String.format(Locale.getDefault(), defaultFormat, *args)
+}
+
+/**
+ * Format season & episode numbers using localized string resources.
+ * Returns null if [season] or [episode] is missing.
+ */
+fun formatSeasonEpisode(
+    season: Int?,
+    episode: Int?,
+    episodeEnd: Int? = null,
+    padded: Boolean = false,
+): String? {
+    if (season == null || episode == null) return null
+    return if (episodeEnd != null) {
+        if (padded) {
+            formatStringWithFallback(R.string.season_episode_number_padded_range, "S%1\$02dE%2\$02d-E%3\$02d", season, episode, episodeEnd)
+        } else {
+            formatStringWithFallback(R.string.season_episode_number_range, "S%1\$d E%2\$d-E%3\$d", season, episode, episodeEnd)
+        }
+    } else if (padded) {
+        formatStringWithFallback(R.string.season_episode_number_padded, "S%1\$02dE%2\$02d", season, episode)
+    } else {
+        formatStringWithFallback(R.string.season_episode_number, "S%1\$d E%2\$d", season, episode)
+    }
+}
+
+/** Compact episode-only label, e.g. `E3`. */
+fun formatEpisodeNumber(episode: Int): String = formatStringWithFallback(R.string.episode_number_short, "E%1\$d", episode)
+
+/** Fallback season title when the library has no season name, e.g. `Season 2`. */
+fun formatSeasonNumber(season: Int): String = formatStringWithFallback(R.string.season_number, "Season %1\$d", season)
+
+/**
+ * If the item has season & episode info, format as localized `S# E#`
+ */
+val BaseItemDto.seasonEpisode: String?
+    get() =
+        formatSeasonEpisode(
+            parentIndexNumber,
+            indexNumber,
+            indexNumberEnd,
+        )
+
+/**
+ * If the item has season & episode info, format padded as localized `S##E##`
+ */
+val BaseItemDto.seasonEpisodePadded: String?
+    get() =
+        formatSeasonEpisode(
+            parentIndexNumber,
+            indexNumber,
+            indexNumberEnd,
+            padded = true,
+        )
+
+val BaseItemDto.seriesProductionYears: String?
+    get() =
+        if (productionYear != null) {
+            buildString {
+                append(productionYear.toString())
+                if (status == "Continuing") {
+                    append(" - ")
+                    append(JellyVaultApplication.instance.getString(R.string.series_continueing))
+                } else if (status == "Ended") {
+                    endDate?.let {
+                        if (it.year != productionYear) {
+                            append(" - ")
+                            append(it.year)
+                        }
+                    }
+                }
+            }
+        } else {
+            null
+        }
+
+private val abbrevSuffixes = listOf("", "K", "M", "B")
+
+/**
+ * Format a number by abbreviation, eg 5533 => 5.5K
+ */
+fun abbreviateNumber(number: Int): String {
+    if (number < 1000) {
+        return number.toString()
+    }
+    var unit = 0
+    var count = number.toDouble()
+    while (count >= 1000 && unit + 1 < abbrevSuffixes.size) {
+        count /= 1000
+        unit++
+    }
+    return String.format(Locale.getDefault(), "%.1f%s", count, abbrevSuffixes[unit])
+}
+
+val byteSuffixes = listOf("B", "KiB", "MiB", "GiB", "TiB")
+val byteRateSuffixes = listOf("bps", "kbps", "mbps", "gbps", "tbps")
+
+fun formatBytes(
+    bytes: Long,
+    suffixes: List<String> = byteSuffixes,
+    divisor: Int = 1024,
+): String {
+    var unit = 0
+    var count = bytes.toDouble()
+    while (count >= divisor && unit + 1 < suffixes.size) {
+        count /= divisor
+        unit++
+    }
+    return String.format(Locale.getDefault(), "%.2f %s", count, suffixes[unit])
+}
+
+fun formatBitrate(bitrate: Int) = formatBytes(bitrate.toLong(), byteRateSuffixes, 1000)
+
+@get:StringRes
+val MediaSegmentType.stringRes: Int
+    get() =
+        when (this) {
+            MediaSegmentType.UNKNOWN -> R.string.unknown
+            MediaSegmentType.COMMERCIAL -> R.string.commercial
+            MediaSegmentType.PREVIEW -> R.string.preview
+            MediaSegmentType.RECAP -> R.string.recap
+            MediaSegmentType.OUTRO -> R.string.outro
+            MediaSegmentType.INTRO -> R.string.intro
+        }
+
+@get:StringRes
+val MediaSegmentType.skipStringRes: Int
+    get() =
+        when (this) {
+            MediaSegmentType.UNKNOWN -> R.string.skip_segment_unknown
+            MediaSegmentType.COMMERCIAL -> R.string.skip_segment_commercial
+            MediaSegmentType.PREVIEW -> R.string.skip_segment_preview
+            MediaSegmentType.RECAP -> R.string.skip_segment_recap
+            MediaSegmentType.OUTRO -> R.string.skip_segment_outro
+            MediaSegmentType.INTRO -> R.string.skip_segment_intro
+        }
+
+const val DOT_SEPARATOR = "  \u2022  "
+
+fun AnnotatedString.Builder.dot() = append(DOT_SEPARATOR)
+
+/**
+ * Rating segments start with a [dot] separator: drop it when the segment ends up first on its line
+ */
+fun AnnotatedString.withoutLeadingDot(): AnnotatedString =
+    if (text.startsWith(DOT_SEPARATOR)) subSequence(DOT_SEPARATOR.length, length) else this
+
+/**
+ * The quick details segments actually shown, in order: blank ones are skipped and the first one never starts with a separator
+ */
+fun visibleQuickDetailSegments(segments: List<AnnotatedString?>): List<AnnotatedString> =
+    segments
+        .filterNotNull()
+        .filter { it.text.replace(DOT_SEPARATOR, "").isNotBlank() }
+        .mapIndexed { index, segment -> if (index == 0) segment.withoutLeadingDot() else segment }
+
+fun listToDotString(
+    strings: List<String>,
+    communityRating: Float?,
+    criticRating: Float?,
+): AnnotatedString =
+    buildAnnotatedString {
+        strings.forEachIndexed { index, string ->
+            append(string)
+            if (index != strings.lastIndex) dot()
+        }
+        communityRating?.let {
+            dot()
+            append(String.format(Locale.getDefault(), "%.1f", it))
+            appendInlineContent(id = "star")
+        }
+        criticRating?.let {
+            dot()
+            append("${it.toInt()}%")
+            if (it >= 60f) {
+                appendInlineContent(id = "fresh")
+            } else {
+                appendInlineContent(id = "rotten")
+            }
+        }
+    }
+
+@get:StringRes
+val BaseItemKind.titleStringRes: Int
+    get() = formatTypeName(this)
+
+@StringRes
+fun formatTypeName(type: BaseItemKind): Int =
+    when (type) {
+        BaseItemKind.MOVIE -> R.string.movies_title
+        BaseItemKind.SERIES -> R.string.tv_shows_title
+        BaseItemKind.EPISODE -> R.string.episodes
+        BaseItemKind.VIDEO -> R.string.videos
+        BaseItemKind.PLAYLIST -> R.string.playlists
+        BaseItemKind.PERSON -> R.string.people_title
+        BaseItemKind.BOX_SET -> R.string.collections
+        BaseItemKind.AUDIO -> R.string.songs
+        BaseItemKind.CHANNEL -> R.string.channels
+        BaseItemKind.GENRE -> R.string.genres
+        BaseItemKind.LIVE_TV_CHANNEL -> R.string.channels
+        BaseItemKind.MUSIC_ALBUM -> R.string.albums
+        BaseItemKind.MUSIC_ARTIST -> R.string.artists
+        BaseItemKind.MUSIC_GENRE -> R.string.genres
+        BaseItemKind.MUSIC_VIDEO -> R.string.music_videos
+        BaseItemKind.PHOTO -> R.string.photos
+        BaseItemKind.PHOTO_ALBUM -> R.string.photo_albums
+        BaseItemKind.PROGRAM -> R.string.programs
+        BaseItemKind.RECORDING -> R.string.recordings
+        BaseItemKind.SEASON -> R.string.tv_seasons
+        BaseItemKind.STUDIO -> R.string.studios
+        BaseItemKind.TRAILER -> R.string.trailers_title
+        BaseItemKind.TV_CHANNEL -> R.string.channels
+        BaseItemKind.TV_PROGRAM -> R.string.programs
+        BaseItemKind.USER_ROOT_FOLDER -> R.string.folders_title
+        BaseItemKind.USER_VIEW -> R.string.user_views
+        BaseItemKind.YEAR -> R.string.year
+        BaseItemKind.AGGREGATE_FOLDER -> R.string.folders_title
+        BaseItemKind.AUDIO_BOOK -> R.string.audio_books
+        BaseItemKind.BASE_PLUGIN_FOLDER -> R.string.folders_title
+        BaseItemKind.BOOK -> R.string.books
+        BaseItemKind.CHANNEL_FOLDER_ITEM -> R.string.folders_title
+        BaseItemKind.COLLECTION_FOLDER -> R.string.library
+        BaseItemKind.FOLDER -> R.string.folders_title
+        BaseItemKind.MANUAL_PLAYLISTS_FOLDER -> R.string.playlists
+        BaseItemKind.LIVE_TV_PROGRAM -> R.string.programs
+        BaseItemKind.PLAYLISTS_FOLDER -> R.string.playlists
+    }
+
+/**
+ * Format a [Duration] into a localized "Xh Ym Zs" string using string resources.
+ */
+fun Resources.formatDuration(duration: Duration): String =
+    duration.toComponents { hours, minutes, seconds, _ ->
+        when {
+            hours > 0 && minutes > 0 && seconds > 0 -> getString(R.string.duration_hours_minutes_seconds, hours.toInt(), minutes, seconds)
+            hours > 0 && minutes > 0 -> getString(R.string.duration_hours_minutes, hours.toInt(), minutes)
+            hours > 0 && seconds > 0 -> getString(R.string.duration_hours_seconds, hours.toInt(), seconds)
+            hours > 0 -> getString(R.string.duration_hours, hours.toInt())
+            minutes > 0 && seconds > 0 -> getString(R.string.duration_minutes_seconds, minutes, seconds)
+            minutes > 0 -> getString(R.string.duration_minutes, minutes)
+            else -> getString(R.string.duration_seconds, seconds)
+        }
+    }

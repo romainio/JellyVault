@@ -1,0 +1,448 @@
+package tv.jellyvault.app.services
+
+import android.content.Context
+import android.content.pm.PackageInfo
+import android.os.Build
+import androidx.core.content.edit
+import androidx.datastore.core.DataStore
+import androidx.preference.PreferenceManager
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.first
+import org.jellyfin.sdk.model.api.BaseItemKind
+import org.jellyfin.sdk.model.serializer.toUUIDOrNull
+import timber.log.Timber
+import tv.jellyvault.app.LegacyNames
+import tv.jellyvault.app.data.JellyfinServerDao
+import tv.jellyvault.app.data.RememberedTabDao
+import tv.jellyvault.app.data.model.JellyfinUser
+import tv.jellyvault.app.data.model.RememberedTab
+import tv.jellyvault.app.preferences.AppPreference
+import tv.jellyvault.app.preferences.AppPreferences
+import tv.jellyvault.app.preferences.ExperimentalPreference
+import tv.jellyvault.app.preferences.ScreensaverPreference
+import tv.jellyvault.app.preferences.update
+import tv.jellyvault.app.preferences.updateAdvancedPreferences
+import tv.jellyvault.app.preferences.updateExperimentalPreferences
+import tv.jellyvault.app.preferences.updateHomePagePreferences
+import tv.jellyvault.app.preferences.updateInterfacePreferences
+import tv.jellyvault.app.preferences.updateLiveTvPreferences
+import tv.jellyvault.app.preferences.updateMpvOptions
+import tv.jellyvault.app.preferences.updateMusicPreferences
+import tv.jellyvault.app.preferences.updatePhotoPreferences
+import tv.jellyvault.app.preferences.updatePlaybackOverrides
+import tv.jellyvault.app.preferences.updatePlaybackPreferences
+import tv.jellyvault.app.preferences.updateScreensaverPreferences
+import tv.jellyvault.app.preferences.updateSearchPreferences
+import tv.jellyvault.app.preferences.updateSubtitlePreferences
+import tv.jellyvault.app.ui.preferences.PreferencesViewModel
+import tv.jellyvault.app.ui.preferences.subtitle.SubtitleSettings
+import tv.jellyvault.app.ui.preferences.subtitle.shouldEnableSeparateHdrToggle
+import tv.jellyvault.app.util.Version
+import java.io.File
+import java.util.UUID
+import javax.inject.Inject
+import javax.inject.Singleton
+
+/**
+ * Handles any changes needed when the app in upgraded on the device such as setting new preferences
+ */
+@Singleton
+class AppUpgradeHandler
+    @Inject
+    constructor(
+        @param:ApplicationContext private val context: Context,
+        private val appPreferences: DataStore<AppPreferences>,
+        private val serverDao: JellyfinServerDao,
+        private val rememberedTabDao: RememberedTabDao,
+        private val packageRenameMigration: PackageRenameMigration,
+    ) {
+        val pkgInfo: PackageInfo get() = context.packageManager.getPackageInfo(context.packageName, 0)
+        val currentVersion: Version get() = Version.fromString(pkgInfo.versionName!!)
+
+        fun needUpgrade(): Boolean {
+            val prefs = PreferenceManager.getDefaultSharedPreferences(context)
+            val previousVersion = prefs.getString(VERSION_NAME_CURRENT_KEY, null)
+            val previousVersionCode = prefs.getLong(VERSION_CODE_CURRENT_KEY, -1)
+
+            val newVersion = pkgInfo.versionName!!
+            val newVersionCode =
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    pkgInfo.longVersionCode
+                } else {
+                    pkgInfo.versionCode.toLong()
+                }
+            Timber.i(
+                "App versions: $previousVersion=>$newVersion, $previousVersionCode=>$newVersionCode",
+            )
+            return newVersion != previousVersion || newVersionCode != previousVersionCode
+        }
+
+        suspend fun run() {
+            Timber.i("App upgrade started")
+            val prefs = PreferenceManager.getDefaultSharedPreferences(context)
+            val previousVersion = prefs.getString(VERSION_NAME_CURRENT_KEY, null)
+            val previousVersionCode = prefs.getLong(VERSION_CODE_CURRENT_KEY, -1)
+
+            val newVersion = pkgInfo.versionName!!
+            val newVersionCode =
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    pkgInfo.longVersionCode
+                } else {
+                    pkgInfo.versionCode.toLong()
+                }
+            // Store the previous and new version info
+            prefs.edit(true) {
+                putString(VERSION_NAME_PREVIOUS_KEY, previousVersion)
+                putLong(VERSION_CODE_PREVIOUS_KEY, previousVersionCode)
+                putString(VERSION_NAME_CURRENT_KEY, newVersion)
+                putLong(VERSION_CODE_CURRENT_KEY, newVersionCode)
+            }
+            try {
+                copySubfont(true)
+                upgradeApp(
+                    // An unreadable stored version must not skip every upgrade for good: treat it as the oldest one
+                    Version.tryFromString(previousVersion) ?: Version.fromString("0.0.0"),
+                    Version.fromString(newVersion),
+                    appPreferences,
+                )
+            } catch (ex: Exception) {
+                Timber.e(ex, "Exception during app upgrade")
+            }
+            Timber.i("App upgrade complete")
+        }
+
+        /**
+         * Copies the font file used by MPV subtitles to the app's files directory
+         */
+        fun copySubfont(overwrite: Boolean) {
+            try {
+                val fontFileName = "subfont.ttf"
+                val outputFile = File(context.filesDir, fontFileName)
+                if (!outputFile.exists() || overwrite) {
+                    context.assets.open(fontFileName).use { input ->
+                        outputFile.outputStream().use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+                    Timber.i("Wrote font %s to local", fontFileName)
+                }
+//                val oldFontDir = File(context.filesDir, "fonts")
+//                if (oldFontDir.exists()) {
+//                    oldFontDir.deleteRecursively()
+//                }
+            } catch (ex: Exception) {
+                Timber.e(ex, "Exception copying subfont.tff")
+            }
+        }
+
+        companion object {
+            const val VERSION_NAME_PREVIOUS_KEY = "version.previous.name"
+            const val VERSION_CODE_PREVIOUS_KEY = "version.previous.code"
+            const val VERSION_NAME_CURRENT_KEY = "version.current.name"
+            const val VERSION_CODE_CURRENT_KEY = "version.current.code"
+        }
+
+        /**
+         * Perform any needed upgrades
+         */
+        suspend fun upgradeApp(
+            previous: Version,
+            current: Version,
+            appPreferences: DataStore<AppPreferences>,
+        ) {
+            if (previous.isEqualOrBefore(Version.fromString("0.1.0-2-g0"))) {
+                appPreferences.updateData {
+                    it.updatePlaybackOverrides {
+                        ac3Supported = AppPreference.Ac3Supported.defaultValue
+                        downmixStereo = AppPreference.DownMixStereo.defaultValue
+//                        directPlayAss = AppPreference.DirectPlayAss.defaultValue
+                        directPlayPgs = AppPreference.DirectPlayPgs.defaultValue
+                    }
+                }
+            }
+            if (previous.isEqualOrBefore(Version.fromString("0.2.3-6-g0"))) {
+                appPreferences.updateData {
+                    it.updateInterfacePreferences {
+                        navDrawerSwitchOnFocus = AppPreference.NavDrawerSwitchOnFocus.defaultValue
+                    }
+                }
+            }
+            if (previous.isEqualOrBefore(Version.fromString("0.2.5-11-g0"))) {
+                appPreferences.updateData {
+                    it.updateInterfacePreferences {
+                        showClock = AppPreference.ShowClock.defaultValue
+                    }
+                }
+            }
+            if (previous.isEqualOrBefore(Version.fromString("0.2.7-1-g0"))) {
+                PreferencesViewModel.resetSubtitleSettings(appPreferences)
+            }
+            if (previous.isEqualOrBefore(Version.fromString("0.3.2-4-g0"))) {
+                appPreferences.updateData {
+                    it.updateSubtitlePreferences {
+                        margin = SubtitleSettings.Margin.defaultValue.toInt()
+                    }
+                }
+            }
+
+            if (previous.isEqualOrBefore(Version.fromString("0.3.4"))) {
+                appPreferences.updateData {
+                    it.updateAdvancedPreferences {
+                        if (imageDiskCacheSizeBytes < (AppPreference.ImageDiskCacheSize.min * AppPreference.MEGA_BIT)) {
+                            imageDiskCacheSizeBytes =
+                                AppPreference.ImageDiskCacheSize.defaultValue * AppPreference.MEGA_BIT
+                        }
+                    }
+                }
+            }
+
+            if (previous.isEqualOrBefore(Version.fromString("0.3.4-2-g0"))) {
+                appPreferences.updateData {
+                    it.updateMpvOptions {
+                        useGpuNext = AppPreference.MpvGpuNext.defaultValue
+                    }
+                }
+            }
+
+            if (previous.isEqualOrBefore(Version.fromString("0.3.4-4-g0"))) {
+                appPreferences.updateData {
+                    it.update {
+                        signInAutomatically = AppPreference.SignInAuto.defaultValue
+                    }
+                }
+            }
+
+            if (previous.isEqualOrBefore(Version.fromString("0.3.5-0-g0"))) {
+                appPreferences.updateData {
+                    it.updateSubtitlePreferences {
+                        if (edgeThickness < 1) {
+                            edgeThickness = SubtitleSettings.EdgeThickness.defaultValue.toInt()
+                        }
+                    }
+                }
+            }
+            if (previous.isEqualOrBefore(Version.fromString("0.3.5-56-g0"))) {
+                appPreferences.updateData {
+                    it.updateLiveTvPreferences {
+                        showHeader = AppPreference.LiveTvShowHeader.defaultValue
+                        favoriteChannelsAtBeginning =
+                            AppPreference.LiveTvFavoriteChannelsBeginning.defaultValue
+                        sortByRecentlyWatched =
+                            AppPreference.LiveTvChannelSortByWatched.defaultValue
+                        colorCodePrograms =
+                            AppPreference.LiveTvColorCodePrograms.defaultValue
+                    }
+                }
+            }
+
+            if (previous.isEqualOrBefore(Version.fromString("0.3.6-52-g0"))) {
+                if (Build.MODEL.equals("shield android tv", ignoreCase = true)) {
+                    appPreferences.updateData {
+                        it.updateMpvOptions {
+                            useGpuNext = false
+                        }
+                    }
+                }
+            }
+
+            // TODO temporarily disabled until some MPV bugs are fixed
+//    if (previous.isEqualOrBefore(Version.fromString("0.4.0-1-g0"))) {
+//        appPreferences.updateData {
+//            it.updatePlaybackPreferences { playerBackend = PlayerBackend.PREFER_MPV }
+//        }
+//        showToast(context, context.getString(R.string.upgrade_mpv_toast), Toast.LENGTH_LONG)
+//    }
+
+            if (previous.isEqualOrBefore(Version.fromString("0.4.0-2-g0"))) {
+                appPreferences.updateData {
+                    it.updateMpvOptions {
+                        useGpuNext = false
+                    }
+                }
+            }
+
+            if (previous.isEqualOrBefore(Version.fromString("0.4.1-6-g0"))) {
+                appPreferences.updateData {
+                    it.updateInterfacePreferences {
+                        subtitlesPreferences =
+                            subtitlesPreferences
+                                .toBuilder()
+                                .apply {
+                                    imageSubtitleOpacity =
+                                        SubtitleSettings.ImageOpacity.defaultValue.toInt()
+                                }.build()
+                        // Copy current subtitle prefs as HDR ones
+                        hdrSubtitlesPreferences = subtitlesPreferences.toBuilder().build()
+                    }
+                }
+            }
+
+            if (previous.isEqualOrBefore(Version.fromString("0.4.1-7-g0"))) {
+                appPreferences.updateData {
+                    it.updatePhotoPreferences {
+                        slideshowDuration = AppPreference.SlideshowDuration.defaultValue
+                    }
+                }
+            }
+
+            if (previous.isEqualOrBefore(Version.fromString("0.4.1-14-g0"))) {
+                appPreferences.updateData {
+                    it.updateHomePagePreferences {
+                        maxDaysNextUp = AppPreference.MaxDaysNextUp.defaultValue.toInt()
+                    }
+                }
+            }
+
+            if (previous.isEqualOrBefore(Version.fromString("0.5.3-0-g0"))) {
+                appPreferences.updateData {
+                    it.updateScreensaverPreferences {
+                        startDelay = ScreensaverPreference.DEFAULT_START_DELAY
+                        duration = ScreensaverPreference.DEFAULT_DURATION
+                        animate = ScreensaverPreference.Animate.defaultValue
+                        maxAgeFilter = ScreensaverPreference.DEFAULT_MAX_AGE
+                        clearItemTypes()
+                        addItemTypes(BaseItemKind.MOVIE.serialName)
+                        addItemTypes(BaseItemKind.SERIES.serialName)
+                    }
+                }
+            }
+
+            if (previous.isEqualOrBefore(Version.fromString("0.5.4-6-g0"))) {
+                appPreferences.updateData {
+                    it.updateMusicPreferences {
+                        showBackdrop = true
+                        showLyrics = true
+                        showAlbumArt = true
+                    }
+                }
+            }
+
+            if (previous.isEqualOrBefore(Version.fromString("0.5.4-15-g0"))) {
+                appPreferences.updateData {
+                    it.updateInterfacePreferences {
+                        showLogos = AppPreference.ShowLogos.defaultValue
+                    }
+                }
+            }
+
+            if (previous.isEqualOrBefore(Version.fromString("0.6.2-1-g0"))) {
+                appPreferences.updateData {
+                    it.updatePlaybackOverrides {
+                        assPlaybackMode = AppPreference.AssSubtitleMode.defaultValue
+                    }
+                }
+            }
+
+            if (previous.isEqualOrBefore(Version.fromString("0.6.2-18-g0"))) {
+                appPreferences.updateData {
+                    it.updatePlaybackPreferences { cinemaMode = AppPreference.CinemaMode.defaultValue }
+                }
+            }
+
+            if (previous.isEqualOrBefore(Version.fromString("0.6.4-8-g0"))) {
+                appPreferences.updateData {
+                    it.updateSearchPreferences { showVoiceSearchButton = true }
+                }
+            }
+
+            if (previous.isEqualOrBefore(Version.fromString("0.6.4-26-g0"))) {
+                appPreferences.updateData {
+                    it.updateInterfacePreferences {
+                        clearDisplayToggles()
+                        addAllDisplayToggles(AppPreference.DisplayTogglesPref.defaultValue)
+                    }
+                }
+            }
+
+            if (previous.isEqualOrBefore(Version.fromString("1.0.1-2-g0"))) {
+                Timber.i("Starting tab migration")
+                val users = mutableMapOf<UUID, JellyfinUser?>()
+                val tabs =
+                    appPreferences.data.first().interfacePreferences.rememberedTabsMap.mapNotNull { (key, tabIndex) ->
+                        // "serverId_userId_itemId", itemId can have underscores
+                        try {
+                            val firstUnderScore = key.indexOf("_").takeIf { it >= 1 }
+                            if (firstUnderScore != null) {
+                                val secondUnderscore =
+                                    key
+                                        .indexOf("_", startIndex = firstUnderScore + 1)
+                                        .takeIf { it >= 1 }
+                                if (secondUnderscore != null) {
+                                    val serverId = key.substring(0, firstUnderScore).toUUIDOrNull()
+                                    val userId =
+                                        key
+                                            .substring(firstUnderScore + 1, secondUnderscore)
+                                            .toUUIDOrNull()
+                                    val itemId = key.substring(secondUnderscore + 1, key.length)
+                                    if (userId != null && serverId != null) {
+                                        return@mapNotNull users
+                                            .getOrPut(userId) {
+                                                serverDao.getUser(serverId, userId)
+                                            }?.let {
+                                                RememberedTab(it.rowId, itemId, tabIndex)
+                                            }
+                                    }
+                                }
+                            }
+                        } catch (ex: Exception) {
+                            Timber.w(ex, "Error parsing '%s'", key)
+                        }
+                        null
+                    }
+                Timber.v("Migrating %s tabs", tabs.size)
+                try {
+                    if (tabs.isNotEmpty()) {
+                        rememberedTabDao.saveAll(tabs)
+                    }
+                    appPreferences.updateData {
+                        it.updateInterfacePreferences {
+                            clearRememberedTabs()
+                        }
+                    }
+                } catch (ex: Exception) {
+                    Timber.e(ex, "Error saving migrated tabs")
+                }
+            }
+
+            if (previous.isEqualOrBefore(Version.fromString("1.0.2-8-g0"))) {
+                appPreferences.updateData {
+                    it.updateSubtitlePreferences {
+                        useSeparateHdr = it.interfacePreferences.shouldEnableSeparateHdrToggle()
+                    }
+                }
+            }
+
+            if (previous.isEqualOrBefore(Version.fromString("1.0.6-0-g0"))) {
+                appPreferences.updateData {
+                    it.updateScreensaverPreferences {
+                        dimPercent = ScreensaverPreference.DimPercentage.defaultValue.toInt()
+                    }
+                }
+            }
+
+            if (previous.isEqualOrBefore(Version.fromString("1.0.6-7-g0"))) {
+                // preferAc3Surround was mistaken enabled by default, reset it only if the user hasn't enabled experimental settings
+                appPreferences.updateData {
+                    if (!it.experimentalPreferences.enabled) {
+                        it.updateExperimentalPreferences {
+                            preferAc3Surround =
+                                ExperimentalPreference.PreferAc3ForSurround.defaultValue
+                        }
+                    } else {
+                        it
+                    }
+                }
+            }
+
+            if (previous.isLessThan(Version.fromString(PackageRenameMigration.FIRST_RENAMED))) {
+                packageRenameMigration.run()
+            }
+            // At every upgrade: an update URL left by the old project or by a former name of the repository owner
+            appPreferences.updateData {
+                val stale =
+                    it.updateUrl == LegacyNames.UPDATE_URL ||
+                        (LegacyNames.JELLYVAULT_UPDATE_URL.matches(it.updateUrl) && it.updateUrl != AppPreference.UpdateUrl.defaultValue)
+                if (stale) it.toBuilder().setUpdateUrl(AppPreference.UpdateUrl.defaultValue).build() else it
+            }
+        }
+    }

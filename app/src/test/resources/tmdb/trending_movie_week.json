@@ -1,0 +1,12 @@
+{
+  "page": 1,
+  "results": [
+    {"id": 1022789, "media_type": "movie", "title": "Vice-versa 2", "overview": "Riley entre dans l'adolescence.", "poster_path": "/poster1.jpg", "backdrop_path": "/backdrop1.jpg", "release_date": "2024-06-11", "vote_average": 7.6, "genre_ids": [16, 10751]},
+    {"id": 533535, "media_type": "movie", "title": "Deadpool & Wolverine", "overview": "", "poster_path": "/poster2.jpg", "backdrop_path": null, "release_date": "2024-07-24", "vote_average": 7.7, "genre_ids": [28, 35], "unknown_field": true},
+    {"id": 1, "media_type": "movie", "title": "Sans affiche", "poster_path": null, "release_date": "2024-01-01", "vote_average": 5.0, "genre_ids": []},
+    {"id": 2, "media_type": "movie", "title": "  ", "poster_path": "/p.jpg", "genre_ids": []},
+    {"id": 3, "media_type": "person", "name": "Une personne", "poster_path": "/p.jpg"}
+  ],
+  "total_pages": 1,
+  "total_results": 5
+}

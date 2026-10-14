@@ -1,0 +1,60 @@
+@file:UseSerializers(UUIDSerializer::class)
+
+package tv.jellyvault.app.data.model
+
+import androidx.room.ColumnInfo
+import androidx.room.Entity
+import androidx.room.ForeignKey
+import androidx.room.Ignore
+import androidx.room.Index
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
+import kotlinx.serialization.UseSerializers
+import org.jellyfin.sdk.model.api.ItemSortBy
+import org.jellyfin.sdk.model.api.SortOrder
+import org.jellyfin.sdk.model.serializer.UUIDSerializer
+import tv.jellyvault.app.ui.components.ViewOptions
+import tv.jellyvault.app.ui.data.SortAndDirection
+import tv.jellyvault.app.ui.toServerString
+import java.util.UUID
+
+/**
+ * Stores the filter, sort, and view options a user changes for a library
+ *
+ * This allows for restoring these settings whenever the user navigates to the library
+ */
+@Entity(
+    foreignKeys = [
+        ForeignKey(
+            entity = JellyfinUser::class,
+            parentColumns = arrayOf("rowId"),
+            childColumns = arrayOf("userId"),
+            onDelete = ForeignKey.CASCADE,
+            onUpdate = ForeignKey.CASCADE,
+        ),
+    ],
+    primaryKeys = ["userId", "itemId"],
+    indices = [Index("userId", "itemId", unique = true)],
+)
+@Serializable
+data class LibraryDisplayInfo(
+    val userId: Int,
+    val itemId: String,
+    val sort: ItemSortBy,
+    val direction: SortOrder,
+    @ColumnInfo(defaultValue = "{}")
+    val filter: GetItemsFilter,
+    val viewOptions: ViewOptions?,
+) {
+    @Ignore @Transient
+    val sortAndDirection = SortAndDirection(sort, direction)
+
+    constructor(
+        user: JellyfinUser,
+        itemId: UUID,
+        sort: ItemSortBy,
+        direction: SortOrder,
+        filter: GetItemsFilter,
+        viewOptions: ViewOptions?,
+    ) : this(user.rowId, itemId.toServerString(), sort, direction, filter, viewOptions)
+}

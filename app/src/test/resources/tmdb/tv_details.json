@@ -1,0 +1,16 @@
+{
+  "id": 1396, "name": "Breaking Bad", "overview": "Un professeur de chimie.", "poster_path": "/bb.jpg",
+  "backdrop_path": "/bbb.jpg", "first_air_date": "2008-01-20", "vote_average": 8.9, "tagline": "",
+  "genres": [{"id": 18, "name": "Drame"}],
+  "seasons": [
+    {"season_number": 0, "name": "Épisodes spéciaux", "episode_count": 9, "air_date": "2009-02-17"},
+    {"season_number": 2, "name": "Saison 2", "episode_count": 13, "air_date": "2009-03-08"},
+    {"season_number": 1, "name": "Saison 1", "episode_count": 7, "air_date": "2008-01-20"}
+  ],
+  "videos": {"results": []},
+  "credits": {"cast": []},
+  "recommendations": {"results": []},
+  "images": {"logos": [{"file_path": "/bb_fr.png", "iso_639_1": "fr"}, {"file_path": "/bb_en.png", "iso_639_1": "en"}]},
+  "external_ids": {"tvdb_id": 81189},
+  "content_ratings": {"results": [{"iso_3166_1": "US", "rating": "TV-MA"}]}
+}

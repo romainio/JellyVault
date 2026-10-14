@@ -1,0 +1,1183 @@
+<resources>
+    <string name="app_name" translatable="false">JellyVault</string>
+    <string name="app_name_long" translatable="false">JellyVault</string>
+
+    <string name="about">About</string>
+    <string name="active_recordings">Active Recordings</string>
+    <string name="add_favorite">Favorite</string>
+    <string name="add_server">Add Server</string>
+    <string name="add_user">Add User</string>
+    <string name="audio">Audio</string>
+    <string name="birthplace">Birthplace</string>
+    <string name="bitrate">Bitrate</string>
+    <string name="born">Born</string>
+    <string name="cancel_recording">Cancel Recording</string>
+    <string name="cancel_series_recording">Cancel Series Recording</string>
+    <string name="cancel">Cancel</string>
+    <string name="catalog_trending_movies">Trending movies</string>
+    <string name="catalog_trending_series">Trending series</string>
+    <string name="catalog_genre_movies_format">%1$s · Movies</string>
+    <string name="catalog_genre_series_format">%1$s · Series</string>
+    <string name="catalog_load_error">Could not load. Press to retry.</string>
+    <string name="catalog_tmdb_rows">Trending &amp; genres (TMDB)</string>
+    <string name="catalog_tmdb_not_configured">TMDB not configured: add your key in Settings › TMDB &amp; IMDb ratings</string>
+    <string name="catalog_genre_action">Action</string>
+    <string name="catalog_genre_comedy">Comedy</string>
+    <string name="catalog_genre_thriller">Thriller</string>
+    <string name="catalog_genre_science_fiction">Science fiction</string>
+    <string name="catalog_genre_animation">Animation</string>
+    <string name="catalog_genre_drama">Drama</string>
+    <string name="catalog_genre_documentary">Documentary</string>
+    <string name="catalog_genre_horror">Horror</string>
+    <string name="catalog_genre_romance">Romance</string>
+    <string name="catalog_genre_crime">Crime</string>
+    <string name="catalog_genre_family">Family</string>
+    <string name="catalog_genre_fantasy">Fantasy</string>
+    <string name="catalog_genre_war">War</string>
+    <string name="catalog_genre_western">Western</string>
+    <string name="chapters">Chapters</string>
+    <string name="choose_stream">Choose %1$s</string>
+    <string name="clear_image_cache">Clear image cache</string>
+    <string name="collection">Collection</string>
+    <string name="collections">Collections</string>
+    <string name="commercial">Commercial</string>
+    <string name="community_rating">Community Rating</string>
+    <string name="compose_error_message_title">An error occurred! Press the button to send logs to your server.</string>
+    <string name="confirm">Confirm</string>
+    <string name="continue_watching">Continue watching</string>
+    <string name="critic_rating">Critic Rating</string>
+    <string name="decimal_seconds">%.2f seconds</string>
+    <string name="duration_hours_minutes_seconds">%1$dh %2$dm %3$ds</string>
+    <string name="duration_hours_minutes">%1$dh %2$dm</string>
+    <string name="duration_hours_seconds">%1$dh %2$ds</string>
+    <string name="duration_minutes_seconds">%1$dm %2$ds</string>
+    <string name="duration_hours">%1$dh</string>
+    <string name="duration_minutes">%1$dm</string>
+    <string name="duration_seconds">%1$ds</string>
+    <string name="default_track">Default</string>
+    <string name="delete">Delete</string>
+    <string name="died">Died</string>
+    <string name="directed_by">Directed by %1$s</string>
+    <string name="director">Director</string>
+    <string name="disabled">Disabled</string>
+    <string name="discovered_servers">Discovered Servers</string>
+    <string name="download_and_update"><![CDATA[Download & Update]]></string>
+    <string name="downloading">Downloading…</string>
+    <string name="enabled">Enabled</string>
+    <string name="ends_at">Ends at %1$s</string>
+    <string name="enter_server_url">Enter Server IP or URL</string>
+    <string name="enter_server_address">Enter server address</string>
+    <string name="episodes">Episodes</string>
+    <string name="error_loading_collection">Error loading collection %1$s</string>
+    <string name="external_track">External</string>
+    <string name="favorites">Favorites</string>
+    <string name="file_size">Size</string>
+    <string name="forced_track">Forced</string>
+    <string name="genres">Genres</string>
+    <string name="go_to_series">Go to series</string>
+    <string name="go_to">Go To</string>
+    <string name="hide_controller_timeout">Hide playback controls</string>
+    <string name="hide_debug_info">Hide debug info</string>
+    <string name="hide">Hide</string>
+    <string name="home">Home</string>
+    <string name="immediate">Immediate</string>
+    <string name="intro">Intro</string>
+    <string name="jump_letters">#ABCDEFGHIJKLMNOPQRSTUVWXYZ</string>
+    <string name="library">Library</string>
+    <string name="license_info">License information</string>
+    <string name="live_tv">Live TV</string>
+    <string name="loading">Loading…</string>
+    <string name="mark_entire_series_as_played">Mark entire series as played?</string>
+    <string name="mark_entire_series_as_unplayed">Mark entire series as unplayed?</string>
+    <string name="mark_unwatched">Mark as unwatched</string>
+    <string name="mark_watched">Mark as watched</string>
+    <string name="max_bitrate">Max bitrate</string>
+    <string name="more_like_this">More like this</string>
+    <string name="more">More</string>
+    <string name="movies_title">Movies</string>
+    <string name="name">Name</string>
+    <string name="next_up">Next Up</string>
+    <string name="no_data">No data</string>
+    <string name="no_results">No results</string>
+    <string name="no_servers_found">No servers found</string>
+    <string name="no_scheduled_recordings">No scheduled recordings</string>
+    <string name="no_update_available">No update available</string>
+    <string name="none">None</string>
+    <string name="only_forced_subtitles">Only Forced Subtitles</string>
+    <string name="outro">Outro</string>
+    <string name="path">Path</string>
+    <string name="people_title">People</string>
+    <string name="play_count">Play Count</string>
+    <string name="play_from_here">Play from here</string>
+    <string name="play">Play</string>
+    <string name="playback_debug_info">Show playback debug info</string>
+    <string name="playback_speed">Playback Speed</string>
+    <string name="playback">Playback</string>
+    <string name="playlist">Playlist</string>
+    <string name="playlists">Playlists</string>
+    <string name="preview">Preview</string>
+    <string name="profile_specific_settings">User Profile Settings</string>
+    <string name="profile_specific_settings_from_server">User profile settings from server</string>
+    <string name="queue">Queue</string>
+    <string name="recap">Recap</string>
+    <string name="recently_added_in">Recently added in %1$s</string>
+    <string name="recently_added">Recently added</string>
+    <string name="recently_recorded">Recently Recorded</string>
+    <string name="recently_released">Recently Released</string>
+    <string name="recommended">Recommended</string>
+    <string name="record_program">Record Program</string>
+    <string name="record_series">Record Series</string>
+    <string name="remove_favorite">Unfavorite</string>
+    <string name="restart">Restart</string>
+    <string name="resume">Resume</string>
+    <string name="save">Save</string>
+    <string name="search_and_download"><![CDATA[Search & Download]]></string>
+    <string name="search">Search</string>
+    <string name="searching">Searching…</string>
+    <string name="voice_search">Voice search</string>
+    <string name="voice_starting">Starting</string>
+    <string name="voice_search_prompt">Speak to search</string>
+    <string name="processing">Processing</string>
+    <string name="press_back_to_cancel">Press back to cancel</string>
+    <string name="voice_error_audio">Audio recording error</string>
+    <string name="voice_error_client">Voice recognition error</string>
+    <string name="voice_error_permissions">Microphone permission required</string>
+    <string name="voice_error_network">Network error</string>
+    <string name="voice_error_network_timeout">Network timeout</string>
+    <string name="voice_error_no_match">No speech recognized</string>
+    <string name="voice_error_busy">Voice recognition busy</string>
+    <string name="voice_error_server">Server error</string>
+    <string name="voice_error_speech_timeout">No speech detected</string>
+    <string name="voice_error_unknown">Unknown error</string>
+    <string name="voice_error_start_failed">Failed to start voice recognition</string>
+    <string name="voice_error_timeout">Voice recognition timed out</string>
+    <string name="retry">Retry</string>
+    <string name="select_server">Select Server</string>
+    <string name="select_user">Select User</string>
+    <string name="show_debug_info">Show debug info</string>
+    <string name="show_next_up_when">Show next up</string>
+    <string name="show">Show</string>
+    <string name="shuffle">Shuffle</string>
+    <string name="skip">Skip</string>
+    <string name="sort_by_date_added">Date Added</string>
+    <string name="sort_by_date_episode_added">Date Episode Added</string>
+    <string name="sort_by_date_played">Date Played</string>
+    <string name="sort_by_date_released">Date Released</string>
+    <string name="sort_by_name">Name</string>
+    <string name="sort_by_random">Random</string>
+    <string name="studios">Studios</string>
+    <string name="submit">Submit</string>
+    <string name="subtitle_download_too_long">Download is taking a long time, you may need to restart playback</string>
+    <string name="subtitle">Subtitle</string>
+    <string name="subtitles">Subtitles</string>
+    <string name="suggestions">Suggestions</string>
+    <string name="switch_servers">Switch servers</string>
+    <string name="switch_user">Switch</string>
+    <string name="time_left">%1$s left</string>
+    <string name="top_unwatched">Top Rated Unwatched</string>
+    <string name="trailers_title">Trailers</string>
+    <string name="tv_dvr_schedule">DVR Schedule</string>
+    <string name="tv_guide">Guide</string>
+    <string name="tv_season">Season</string>
+    <string name="tv_seasons">Seasons</string>
+    <string name="season_episode_number">S%1$d E%2$d</string>
+    <string name="season_episode_number_range">S%1$d E%2$d-E%3$d</string>
+    <string name="season_episode_number_padded">S%1$02dE%2$02d</string>
+    <string name="season_episode_number_padded_range">S%1$02dE%2$02d-E%3$02d</string>
+    <string name="episode_number_short">E%1$d</string>
+    <string name="season_number">Season %1$d</string>
+    <string name="tv_shows_title">TV Shows</string>
+    <string name="ui_interface">Interface</string>
+    <string name="unknown">Unknown</string>
+    <string name="updates">Updates</string>
+    <string name="version">Version</string>
+    <string name="video_scale">Video Scale</string>
+    <string name="video">Video</string>
+    <string name="videos">Videos</string>
+    <string name="watch_live">Watch live</string>g
+    <plurals name="years_old">
+        <item quantity="zero">%1$d years old</item>
+        <item quantity="one">%1$d year old</item>
+        <item quantity="other">%1$d years old</item>
+    </plurals>
+    <string name="play_with_transcoding">Play with transcoding</string>
+    <string name="media_information">Media Information</string>
+    <string name="show_clock">Show Clock</string>
+    <string name="aired_episode_order">Aired Episode Order</string>
+    <string name="create_playlist">Create new playlist</string>
+    <string name="add_to_playlist">Add to playlist</string>
+    <string name="one_click_pause">Pause with one click</string>
+    <string name="one_click_pause_summary_on">Press D-Pad center to pause/play</string>
+    <string name="italic_font">Italicize font</string>
+    <string name="font">Font</string>
+    <string name="background">Background</string>
+    <string name="success">Success</string>
+    <string name="official_rating">Parental Rating</string>
+    <string name="runtime_sort">Runtime</string>
+
+    <string name="extras_title">Extras</string>
+    <string name="other_extras_title">Other</string>
+    <string name="behind_the_scenes_title">Behind the Scenes</string>
+    <string name="theme_songs_title">Theme Songs</string>
+    <string name="theme_videos_title">Theme Videos</string>
+    <string name="clips_title">Clips</string>
+    <string name="deleted_scenes_title">Deleted Scenes</string>
+    <string name="interviews_title">Interviews</string>
+    <string name="scenes_title">Scenes</string>
+    <string name="samples_title">Samples</string>
+    <string name="featurettes_title">Featurettes</string>
+    <string name="shorts_title">Shorts</string>
+    <string name="favorite_items_title">Favorite %s</string>
+
+    <plurals name="trailers">
+        <item quantity="zero">Trailers</item>
+        <item quantity="one">Trailer</item>
+        <item quantity="other">Trailers</item>
+    </plurals>
+    <plurals name="other_extras">
+        <item quantity="zero">Other</item>
+        <item quantity="one">Other</item>
+        <item quantity="other">Other</item>
+    </plurals>
+    <plurals name="behind_the_scenes">
+        <item quantity="zero">Behind the scenes</item>
+        <item quantity="one">Behind the scenes</item>
+        <item quantity="other">Behind the scenes</item>
+    </plurals>
+    <plurals name="theme_songs">
+        <item quantity="zero">Theme songs</item>
+        <item quantity="one">Theme song</item>
+        <item quantity="other">Theme songs</item>
+    </plurals>
+    <plurals name="theme_videos">
+        <item quantity="zero">Theme videos</item>
+        <item quantity="one">Theme video</item>
+        <item quantity="other">Theme videos</item>
+    </plurals>
+    <plurals name="clips">
+        <item quantity="zero">Clips</item>
+        <item quantity="one">Clip</item>
+        <item quantity="other">Clips</item>
+    </plurals>
+    <plurals name="deleted_scenes">
+        <item quantity="zero">Deleted scenes</item>
+        <item quantity="one">Deleted scene</item>
+        <item quantity="other">Deleted scenes</item>
+    </plurals>
+    <plurals name="interviews">
+        <item quantity="zero">Interviews</item>
+        <item quantity="one">Interview</item>
+        <item quantity="other">Interviews</item>
+    </plurals>
+    <plurals name="scenes">
+        <item quantity="zero">Scenes</item>
+        <item quantity="one">Scene</item>
+        <item quantity="other">Scenes</item>
+    </plurals>
+    <plurals name="samples">
+        <item quantity="zero">Samples</item>
+        <item quantity="one">Sample</item>
+        <item quantity="other">Samples</item>
+    </plurals>
+    <plurals name="featurettes">
+        <item quantity="zero">Featurettes</item>
+        <item quantity="one">Featurette</item>
+        <item quantity="other">Featurettes</item>
+    </plurals>
+    <plurals name="shorts">
+        <item quantity="zero">Shorts</item>
+        <item quantity="one">Short</item>
+        <item quantity="other">Shorts</item>
+    </plurals>
+
+    <plurals name="downloads">
+        <item quantity="zero">%s downloads</item>
+        <item quantity="one">%s download</item>
+        <item quantity="other">%s downloads</item>
+    </plurals>
+    <plurals name="hours">
+        <item quantity="zero">%d hours</item>
+        <item quantity="one">%d hour</item>
+        <item quantity="other">%d hours</item>
+    </plurals>
+    <plurals name="days">
+        <item quantity="zero">%s days</item>
+        <item quantity="one">%s day</item>
+        <item quantity="other">%s days</item>
+    </plurals>
+    <plurals name="items">
+        <item quantity="zero">%d items</item>
+        <item quantity="one">%d item</item>
+        <item quantity="other">%d items</item>
+    </plurals>
+    <plurals name="seconds">
+        <item quantity="zero">%d seconds</item>
+        <item quantity="one">%d second</item>
+        <item quantity="other">%d seconds</item>
+    </plurals>
+    <plurals name="minutes">
+        <item quantity="zero">%s minutes</item>
+        <item quantity="one">%s minute</item>
+        <item quantity="other">%s minutes</item>
+    </plurals>
+
+    <plurals name="movies">
+        <item quantity="zero">Movies</item>
+        <item quantity="one">Movie</item>
+        <item quantity="other">Movies</item>
+    </plurals>
+    <plurals name="tv_shows">
+        <item quantity="zero">TV Shows</item>
+        <item quantity="one">TV Show</item>
+        <item quantity="other">TV Shows</item>
+    </plurals>
+    <plurals name="people">
+        <item quantity="zero">People</item>
+        <item quantity="one">Person</item>
+        <item quantity="other">People</item>
+    </plurals>
+
+    <!-- Preferences/Setting specific strings -->
+    <string name="pref_key_update_last_check_threshold" translatable="false">preference.update.threshold</string>
+    <string name="pref_key_update_last_check" translatable="false">preference.update.lastTimestamp</string>
+
+    <string name="ac3_supported">Device supports AC3/Dolby Digital</string>
+    <string name="advanced_settings">Advanced Settings</string>
+    <string name="advanced_ui">Advanced UI</string>
+    <string name="app_theme">Application Theme</string>
+    <string name="auto_check_for_updates">Automatically check for updates</string>
+    <string name="auto_play_next_delay">Delay before playing next up</string>
+    <string name="auto_play_next">Auto play next up</string>
+    <string name="check_for_updates">Check for updates</string>
+    <string name="combine_continue_next_summary">Applies to TV Series only</string>
+    <string name="combine_continue_next"><![CDATA[Combine Continue Watching & Next Up]]></string>
+    <string name="direct_play_ass">Use libass for ASS subtitles</string>
+    <string name="direct_play_pgs">Direct play PGS subtitles</string>
+    <string name="downmix_stereo">Always downmix to stereo</string>
+    <string name="ffmpeg_extension_pref">Use FFmpeg decoder module</string>
+    <string name="global_content_scale">Default content scale</string>
+    <string name="install_update">Install update</string>
+    <string name="installed_version">Installed version</string>
+    <string name="max_homepage_items">Max items on home page rows</string>
+    <string name="nav_drawer_pins_summary">Choose the default items to show, others will be hidden</string>
+    <string name="nav_drawer_pins">Customize Navigation Drawer Items</string>
+    <string name="nav_drawer_switch_on_focus_summary_off">Click to switch pages</string>
+    <string name="nav_drawer_switch_on_focus">Switch nav drawer pages on focus</string>
+    <string name="pass_out_protection">Passout Protection</string>
+    <string name="play_theme_music">Play theme music</string>
+    <string name="playback_overrides">Playback overrides</string>
+    <string name="remember_selected_tab">Remember selected tabs</string>
+    <string name="rewatch_next_up">Enable rewatching in next up</string>
+    <string name="seek_bar_steps">Seek bar steps</string>
+    <string name="send_app_logs_summary">Useful for debugging</string>
+    <string name="send_app_logs">Send app logs to current server</string>
+    <string name="send_crash_reports_summary">Will try to send to last connected server</string>
+    <string name="send_crash_reports">Send Crash Reports</string>
+    <string name="settings">Settings</string>
+    <string name="skip_back_on_resume_preference">Skip back when resuming playback</string>
+    <string name="skip_back_preference">Skip back</string>
+    <string name="skip_commercials_behavior">Skip commercials behavior</string>
+    <string name="skip_forward_preference">Skip forward</string>
+    <string name="skip_intro_behavior">Skip intro behavior</string>
+    <string name="skip_outro_behavior">Skip outro behavior</string>
+    <string name="skip_previews_behavior">Skip previews behavior</string>
+    <string name="skip_recap_behavior">Skip recap behavior</string>
+    <string name="update_available">Update available</string>
+    <string name="update_url_summary">URL used to check for app updates</string>
+    <string name="update_url">Update URL</string>
+    <string name="font_size">Font size</string>
+    <string name="font_color">Font color</string>
+    <string name="font_opacity">Font opacity</string>
+    <string name="edge_style">Edge style</string>
+    <string name="edge_color">Edge color</string>
+    <string name="background_opacity">Background opacity</string>
+    <string name="background_style">Background style</string>
+    <string name="subtitle_style">Subtitle style</string>
+    <string name="background_color">Background color</string>
+    <string name="reset">Reset</string>
+    <string name="bold_font">Bold font</string>
+
+    <string name="player_backend">Playback Backend</string>
+    <string name="mpv_hardware_decoding">MPV: Use hardware decoding</string>
+    <string name="disable_if_crash">Disable if you experience crashes</string>
+    <string name="mpv_options">MPV Options</string>
+    <string name="exoplayer_options">ExoPlayer Options</string>
+    <string name="skip_segment_unknown">Skip Segment</string>
+    <string name="skip_segment_commercial">Skip Ads</string>
+    <string name="skip_segment_preview">Skip Preview</string>
+    <string name="skip_segment_recap">Skip Recap</string>
+    <string name="skip_segment_outro">Skip Outro</string>
+    <string name="skip_segment_intro">Skip Intro</string>
+    <string name="played">Played</string>
+    <string name="filter">Filter</string>
+    <string name="year">Year</string>
+    <string name="decade">Decade</string>
+    <string name="remove">Remove</string>
+    <string name="dolby_vision">Dolby Vision</string>
+    <string name="dolby_atmos">Dolby Atmos</string>
+    <string name="mpv_use_gpu_next">MPV: Use gpu-next</string>
+    <string name="mpv_conf">Edit mpv.conf</string>
+    <string name="discard_change">Discard changes?</string>
+    <string name="subtitle_margin">Margin</string>
+    <string name="verbose_logging">Verbose logging</string>
+    <string name="enter_pin">Enter PIN</string>
+    <string name="sign_in_auto">Sign in automatically</string>
+    <string name="use_server_credentials">Login via server</string>
+    <string name="press_enter_to_confirm">Press center to confirm</string>
+    <string name="require_pin_code">Require PIN for profile</string>
+    <string name="require_login">Require login for profile</string>
+    <string name="confirm_pin">Confirm PIN</string>
+    <string name="incorrect">Incorrect</string>
+    <string name="pin_too_short">PIN must be 4 keys or longer</string>
+    <string name="will_remove_pin">Will remove PIN</string>
+    <string name="pin_digits_hint">[0–9]</string>
+    <string name="image_cache_size">Image disk cache size (MB)</string>
+    <string name="disable_audio_offload">Disable audio hardware offload</string>
+    <string name="disable_audio_offload_summary">Disabling offloading audio decoding may fix playback freezes on some devices</string>
+    <string name="view_options">View options</string>
+    <string name="columns">Columns</string>
+    <string name="spacing">Spacing</string>
+    <string name="aspect_ratio">Aspect Ratio</string>
+    <string name="show_details">Show details</string>
+    <string name="image_type">Image type</string>
+    <string name="cast_and_crew"><![CDATA[Cast & Crew]]></string>
+    <string name="guest_stars">Guest stars</string>
+    <string name="edge_size">Edge size</string>
+    <string name="refresh_rate_switching">Refresh rate switching</string>
+    <string name="automatic">Automatic</string>
+    <string name="username_or_password">Use username/password</string>
+    <string name="login">Login</string>
+    <string name="general">General</string>
+    <string name="container">Container</string>
+    <string name="title">Title</string>
+    <string name="codec">Codec</string>
+    <string name="profile">Profile</string>
+    <string name="level">Level</string>
+    <string name="resolution">Resolution</string>
+    <string name="anamorphic">Anamorphic</string>
+    <string name="interlaced">Interlaced</string>
+    <string name="framerate">Framerate</string>
+    <string name="bit_depth">Bit depth</string>
+    <string name="video_range">Video range</string>
+    <string name="video_range_type">Video range type</string>
+    <string name="color_space">Color space</string>
+    <string name="color_transfer">Color transfer</string>
+    <string name="color_primaries">Color primaries</string>
+    <string name="pixel_format">Pixel format</string>
+    <string name="ref_frames">Ref frames</string>
+    <string name="nal">NAL</string>
+    <string name="language">Language</string>
+    <string name="layout">Layout</string>
+    <string name="channels">Channels</string>
+    <string name="sample_rate">Sample rate</string>
+    <string name="avc">AVC</string>
+    <string name="yes">Yes</string>
+    <string name="no">No</string>
+    <string name="sdr">SDR</string>
+    <string name="hdr">HDR</string>
+    <string name="hdr10">HDR10</string>
+    <string name="hdr10_plus">HDR10+</string>
+    <string name="hlg">HLG</string>
+    <string name="bit_unit">bit</string>
+    <string name="sample_rate_unit">Hz</string>
+    <string name="show_titles">Show titles</string>
+    <string name="live_tv_repeat">Repeat</string>
+    <string name="favorite_channels_at_beginning">Show favorite channels first</string>
+    <string name="sort_channels_recently_watched">Sort channels by recently watched</string>
+    <string name="color_code_programs">Color-code programs</string>
+    <string name="subtitle_delay">Subtitle delay</string>
+    <string name="backdrop_display">Backdrop style</string>
+    <string name="combined_search_results">Combined search results</string>
+    <string name="combined_search_results_on">Show all results in a single list</string>
+    <string name="combined_search_results_off">Show results by category</string>
+    <string name="show_voice_search_button">Show voice search button</string>
+    <string name="visible_ui">Visible</string>
+    <string name="hidden_ui">Hidden</string>
+    <string name="results">Results</string>
+    <string name="resolution_switching">Resolution switching</string>
+    <string name="local">Local</string>
+    <string name="play_trailer">Play trailer</string>
+    <string name="no_trailers">No trailers</string>
+    <string name="clear_track_choices">Clear track choices</string>
+    <string name="dts_x">DTS:X</string>
+    <string name="dts_hd">DTS:HD</string>
+    <string name="dts_hd_ma">DTS:HD MA</string>
+    <string name="truehd">TrueHD</string>
+    <string name="dolby_digital">DD</string>
+    <string name="dolby_digital_plus">DD+</string>
+    <string name="dts">DTS</string>
+    <string name="force_dovi_profile_7">Direct play Dolby Vision Profile 7</string>
+    <string name="force_dovi_profile_7_summary">Ignores device compatibility checks</string>
+
+    <string name="pending">Pending</string>
+    <string name="quick_connect">Quick Connect</string>
+    <string name="quick_connect_summary">Authorize another device to log in to your account</string>
+    <string name="quick_connect_code">Enter Quick Connect code</string>
+    <string name="quick_connect_code_error">Code must be 6 digits</string>
+    <string name="quick_connect_success">Device authorized successfully</string>
+    <string name="password">Password</string>
+    <string name="username">Username</string>
+    <string name="url">URL</string>
+    <string name="trending">Trending</string>
+    <string name="upcoming_movies">Upcoming Movies</string>
+    <string name="upcoming_tv">Upcoming TV Shows</string>
+    <string name="software_decoding_av1">AV1 software decoding</string>
+    <string name="upgrade_mpv_toast">MPV is now the default player except for HDR.\nYou can change this in settings.</string>
+    <string name="hdr_subtitle_style">HDR subtitle style</string>
+    <string name="image_subtitle_opacity">Image subtitle opacity</string>
+
+    <string name="brightness">Brightness</string>
+    <string name="contrast">Contrast</string>
+    <string name="saturation">Saturation</string>
+    <string name="hue">Hue</string>
+    <string name="red">Red</string>
+    <string name="green">Green</string>
+    <string name="blue">Blue</string>
+    <string name="blur">Blur</string>
+    <string name="save_for_album">Save for album</string>
+    <string name="play_slideshow">Play slideshow</string>
+    <string name="stop_slideshow">Stop slideshow</string>
+    <string name="slideshow_at_beginning">At beginning</string>
+    <string name="no_more_images">No more photos</string>
+    <string name="rotate_left">Rotate left</string>
+    <string name="rotate_right">Rotate right</string>
+    <string name="zoom_in">Zoom in</string>
+    <string name="zoom_out">Zoom out</string>
+    <string name="slideshow_duration">Slideshow duration</string>
+    <string name="play_videos_during_slideshow">Play videos during slideshow</string>
+    <string name="send_media_info_log_to_server">Send media info log to server</string>
+    <string name="no_limit">No limit</string>
+    <string name="max_days_next_up">Max days in Next Up</string>
+    <string name="albums">Albums</string>
+    <string name="artists">Artists</string>
+    <string name="songs">Songs</string>
+    <string name="go_to_artist">Go to artist</string>
+    <string name="now_playing">Now playing</string>
+    <string name="instant_mix">Instant mix</string>
+    <string name="go_to_album">Go to album</string>
+    <string name="add_to_queue">Add to queue</string>
+
+    <string name="add_row">Add row</string>
+    <string name="genres_in">Genres in %1$s</string>
+    <string name="recently_released_in">Recently released in %1$s</string>
+    <string name="height">Height</string>
+    <string name="apply_all_rows">Apply to all rows</string>
+    <string name="customize_home">Customize home page</string>
+    <string name="home_rows">Home rows</string>
+    <string name="load_from_server">Load from server user profile</string>
+    <string name="save_to_server">Save to server user profile</string>
+    <string name="load_from_web_client">Load from web client</string>
+    <string name="use_series">Use series image</string>
+    <string name="add_row_for">Add row for %1$s</string>
+    <string name="overwrite_server_settings">Overwrite settings on server?</string>
+    <string name="overwrite_local_settings">Overwrite local settings?</string>
+    <string name="for_episodes">For episodes</string>
+    <string name="suggestions_for">Suggestions for %1$s</string>
+    <string name="increase_all_cards_size">Increase size for all cards</string>
+    <string name="decrease_all_cards_size">Decrease size for all cards</string>
+    <string name="use_thumb_images">Use thumb images</string>
+    <string name="settings_saved">Settings saved</string>
+    <string name="display_presets">Display presets</string>
+    <string name="display_presets_description">Built-in presets to quickly style all rows</string>
+    <string name="customize_home_summary">Choose rows and images on the home page</string>
+    <string name="prefer_ac3_for_surround_summary"><![CDATA[Transcode non-stereo audio to AC3/Dolby Digital]]></string>
+    <string name="prefer_ac3_for_surround">Use AC3 for surround sound audio</string>
+    <string name="start_after">Start after</string>
+    <string name="animate">Animate</string>
+    <string name="max_age_rating">Max age rating</string>
+    <string name="no_max">No max</string>
+    <string name="for_all_ages">For all ages</string>
+    <string name="up_to_age">Up to age %s</string>
+    <string name="screensaver">Screensaver</string>
+    <string name="screensaver_settings">Screensaver settings</string>
+    <string name="start_screensaver">Start screensaver</string>
+    <string name="duration">Duration</string>
+    <string name="photos">Photos</string>
+    <string name="include_types">Include types</string>
+    <string name="include_types_summary">What types of items to show images for</string>
+    <string name="content_scale_fit">Fit</string>
+    <string name="content_scale_crop">Crop</string>
+    <string name="content_scale_fill">Fill</string>
+    <string name="content_scale_fill_width">Fill width</string>
+    <string name="content_scale_fill_height">Fill height</string>
+    <string name="display_preset_default">JellyVault Default</string>
+    <string name="display_preset_compact">JellyVault Compact</string>
+    <string name="display_preset_series_thumb">Series Thumb images</string>
+    <string name="display_preset_episode_thumbnails">Episode Thumbnail images</string>
+
+    <string name="volume_lowest">Lowest</string>
+    <string name="volume_low">Low</string>
+    <string name="volume_medium">Medium</string>
+    <string name="volume_high">High</string>
+    <string name="volume_full">Full</string>
+    <string-array name="theme_song_volume">
+        <item>@string/disabled</item>
+        <item>@string/volume_lowest</item>
+        <item>@string/volume_low</item>
+        <item>@string/volume_medium</item>
+        <item>@string/volume_high</item>
+        <item>@string/volume_full</item>
+    </string-array>
+
+    <string name="purple">Purple</string>
+    <string name="orange">Orange</string>
+    <string name="bold_blue">Bold Blue</string>
+    <string name="black">Black</string>
+    <string name="brown">Brown</string>
+    <string-array name="app_theme_colors">
+        <item>@string/purple</item>
+        <item>@string/blue</item>
+        <item>@string/green</item>
+        <item>@string/orange</item>
+        <item>@string/bold_blue</item>
+        <item>@string/black</item>
+        <item>@string/red</item>
+        <item>@string/brown</item>
+    </string-array>
+
+    <string name="skip_ignore">Ignore</string>
+    <string name="skip_automatically">Skip automatically</string>
+    <string name="skip_ask">Ask to skip</string>
+    <string-array name="skip_behaviors">
+        <item>@string/skip_ignore</item>
+        <item>@string/skip_automatically</item>
+        <item>@string/skip_ask</item>
+    </string-array>
+
+    <string-array name="content_scale">
+        <item>@string/content_scale_fit</item>
+        <item>@string/none</item>
+        <item>@string/content_scale_crop</item>
+        <item>@string/content_scale_fill</item>
+        <item>@string/content_scale_fill_width</item>
+        <item>@string/content_scale_fill_height</item>
+    </string-array>
+
+    <string name="ffmpeg_fallback">Only use FFmpeg if no built-in decoder exists</string>
+    <string name="ffmpeg_prefer">Prefer to use FFmpeg over built-in decoders</string>
+    <string name="ffmpeg_never">Never use FFmpeg decoders</string>
+    <string-array name="ffmpeg_extension_options">
+        <item>@string/ffmpeg_fallback</item>
+        <item>@string/ffmpeg_prefer</item>
+        <item>@string/ffmpeg_never</item>
+    </string-array>
+
+    <string name="next_up_playback_end">At the end of playback</string>
+    <string name="next_up_outro">During end credits/outro</string>
+    <string name="next_up_never">Never</string>
+    <string-array name="show_next_up_when_options">
+        <item>@string/next_up_playback_end</item>
+        <item>@string/next_up_outro</item>
+        <item>@string/next_up_never</item>
+    </string-array>
+
+    <string name="white">White</string>
+    <string name="light_gray">Light gray</string>
+    <string name="dark_gray">Dark gray</string>
+    <string name="yellow">Yellow</string>
+    <string name="cyan">Cyan</string>
+    <string name="magenta">Magenta</string>
+    <string-array name="font_colors">
+        <item>@string/white</item>
+        <item>@string/black</item>
+        <item>@string/light_gray</item>
+        <item>@string/dark_gray</item>
+        <item>@string/red</item>
+        <item>@string/yellow</item>
+        <item>@string/green</item>
+        <item>@string/cyan</item>
+        <item>@string/blue</item>
+        <item>@string/magenta</item>
+    </string-array>
+
+    <string name="subtitle_edge_outline">Outline</string>
+    <string name="subtitle_edge_shadow">Shadow</string>
+    <string-array name="subtitle_edge">
+        <item>@string/none</item>
+        <item>@string/subtitle_edge_outline</item>
+        <item>@string/subtitle_edge_shadow</item>
+    </string-array>
+
+    <string name="background_style_wrap">Wrap</string>
+    <string name="background_style_boxed">Boxed</string>
+    <string-array name="background_style">
+        <item>@string/none</item>
+        <item>@string/background_style_wrap</item>
+        <item>@string/background_style_boxed</item>
+    </string-array>
+
+    <string name="exoplayer" translatable="false">ExoPlayer</string>
+    <string name="mpv" translatable="false">MPV</string>
+    <string name="prefer_mpv">Prefer MPV</string>
+    <string name="external_player">External Player</string>
+    <string-array name="player_backend_options">
+        <item>@string/exoplayer</item>
+        <item>@string/mpv</item>
+        <item>@string/prefer_mpv</item>
+        <item>@string/external_player</item>
+    </string-array>
+
+    <string name="player_backend_options_subtitles_prefer_mpv">Use ExoPlayer for HDR playback</string>
+    <string-array name="player_backend_options_subtitles">
+        <item /><!-- Intentionally blank -->
+        <item /><!-- Intentionally blank -->
+        <item>@string/player_backend_options_subtitles_prefer_mpv</item>
+        <item /><!-- Intentionally blank -->
+    </string-array>
+
+    <string name="aspect_ratios_poster">Poster (2:3)</string>
+    <string name="aspect_ratios_16_9">16:9</string>
+    <string name="aspect_ratios_4_3">4:3</string>
+    <string name="aspect_ratios_square">Square (1:1)</string>
+    <string-array name="aspect_ratios">
+        <item>@string/aspect_ratios_poster</item>
+        <item>@string/aspect_ratios_16_9</item>
+        <item>@string/aspect_ratios_4_3</item>
+        <item>@string/aspect_ratios_square</item>
+    </string-array>
+
+    <string name="image_type_primary">Primary</string>
+    <string name="image_type_thumb">Thumb</string>
+    <string-array name="image_types">
+        <item>@string/image_type_primary</item>
+        <item>@string/image_type_thumb</item>
+        <!--        <item>Banner</item>-->
+    </string-array>
+    <string name="view_options_type_grid">Grid</string>
+    <string name="view_options_type_list">List</string>
+    <string name="view_options_type_list_compact">Compact List</string>
+    <string-array name="view_options_types">
+        <item>@string/view_options_type_grid</item>
+        <item>@string/view_options_type_list</item>
+        <item>@string/view_options_type_list_compact</item>
+    </string-array>
+
+    <string name="backdrop_style_dynamic">Image with dynamic color</string>
+    <string name="backdrop_style_image">Image only</string>
+    <string name="enter_url_api_key"><![CDATA[Enter URL & API Key]]></string>
+    <string name="api_key">API Key</string>
+    <string name="search_and_download_subtitles"><![CDATA[Search & download subtitles]]></string>
+    <string name="no_subtitles_found">No remote subtitles were found</string>
+    <string name="series_continueing">Present</string>
+    <string name="in_app_screensaver">Use in-app screensaver</string>
+    <string name="delete_item">Are you sure you want to delete this item?</string>
+    <string name="show_media_management">Show media management options</string>
+    <string-array name="backdrop_style_options">
+        <item>@string/backdrop_style_image</item>
+        <item>@string/none</item>
+    </string-array>
+
+    <string-array name="screensaver_item_types">
+        <item>@string/movies_title</item>
+        <item>@string/tv_shows_title</item>
+        <item>@string/photos</item>
+    </string-array>
+
+    <string-array name="display_toggle_types">
+        <item>@string/official_rating</item>
+        <item>@string/critic_rating</item>
+        <item>@string/community_rating</item>
+    </string-array>
+    <string-array name="display_toggle_types_subtitles">
+        <item></item><!-- Intentionally blank -->
+        <item>@string/tomatoes</item>
+        <item>@string/stars</item>
+    </string-array>
+
+    <string name="search_for">Search %s</string>
+
+    <string name="actor">Actor</string>
+    <string name="composer">Composer</string>
+    <string name="writer">Writer</string>
+    <string name="guest_star">Guest star</string>
+    <string name="producer">Producer</string>
+    <string name="conductor">Conductor</string>
+    <string name="lyricist">Lyricist</string>
+    <string name="arranger">Arranger</string>
+    <string name="engineer">Engineer</string>
+    <string name="mixer">Mixer</string>
+    <string name="creator">Creator</string>
+    <string name="artist">Artist</string>
+    <string name="album_artist">Album artist</string>
+    <string name="album">Album</string>
+    <string name="popular_songs">Popular songs</string>
+    <string name="play_next">Play next</string>
+    <string name="music_videos">Music videos</string>
+    <string name="lyrics">Lyrics</string>
+    <string name="hide_lyrics">Hide lyrics</string>
+    <string name="show_lyrics">Show lyrics</string>
+    <string name="song_has_lyrics">Song has lyrics</string>
+    <string name="remove_from_queue">Remove from queue</string>
+    <string name="show_album_cover">Show album cover</string>
+    <string name="show_visualizer">Show visualizer</string>
+    <string name="show_backdrop">Show backdrop</string>
+    <string name="play_as_type">Play as?</string>
+    <string name="visualizer_rationale">Visualizing the currently playing audio requires permission to record audio.</string>
+    <string name="continue_string">Continue</string>
+    <string name="select_all">Select all</string>
+    <string name="separate_types">Separate types</string>
+    <string name="prefer_logos">Prefer showing logos for titles</string>
+    <string name="updated_toast">JellyVault updated to %s</string>
+    <string name="remove_continue_watching">Remove from continue watching</string>
+    <string name="remove_next_up">Remove series from next up</string>
+    <string name="view_removed_next_up">View series removed from next up</string>
+    <string name="view_more">View more</string>
+    <string name="studios_in">Studios in %1$s</string>
+    <string name="last_played">Last played</string>
+    <string name="system_default">System default</string>
+    <string name="ass_subtitle_mode_libass">Direct play with libass</string>
+    <string name="ass_subtitle_mode_exoplayer">Direct play with ExoPlayer built-in</string>
+    <string name="ass_subtitle_mode_transcode">Burn in/transcode on server</string>
+    <string name="ass_subtitle_playback">SSA/ASS subtitle playback</string>
+    <string name="cinema_mode">Cinema mode</string>
+    <string name="show_more">Show %1$s more</string>
+    <string name="skip_behavior">Skip behavior</string>
+    <string name="skip_behavior_summary">For intros, credits, etc</string>
+    <string name="play_with">Play with</string>
+    <string name="transcoding">Transcoding</string>
+    <string name="user_interface_language">User interface language</string>
+    <string name="display_toggles_title">Ratings display</string>
+    <string name="display_toggles_summary">Customize which to display</string>
+    <string name="profile_protection">Profile protection</string>
+    <string name="continue_watching_click_behavior">Continue watching/Next up click behavior</string>
+    <string name="continue_watching_click_summary_on">Play on click</string>
+    <string name="continue_watching_click_summary_off">Show details on click</string>
+    <array name="ass_subtitle_modes">
+        <item>@string/ass_subtitle_mode_libass</item>
+        <item>@string/ass_subtitle_mode_exoplayer</item>
+        <item>@string/ass_subtitle_mode_transcode</item>
+    </array>
+    <array name="ass_subtitle_modes_summary">
+        <item>@string/default_track</item>
+        <item></item><!-- Intentionally blank -->
+        <item></item><!-- Intentionally blank -->
+    </array>
+    <string name="stars">Stars</string>
+    <string name="tomatoes">Tomatoes</string>
+    <string name="sort">Sort</string>
+    <string name="split_into_separate_rows">Split into separate rows</string>
+    <string name="genre_movies">%1$s Movies</string>
+    <string name="genre_tv_shows">%1$s TV Shows</string>
+    <string name="quality_profile">Quality profile</string>
+    <string name="is_default">Default</string>
+    <string name="root_folder">Root folder</string>
+    <string name="popularity">Popularity</string>
+    <string name="production_status">Production status</string>
+    <string name="different_for_hdr">Use different style for HDR</string>
+    <string name="experimental_settings">Experimental settings</string>
+    <string name="confirm_enable_experimental_title">Enable experimental settings?</string>
+    <string name="confirm_enable_experimental_body">Experimental settings may be unstable!\n\n These may removed or changed in any release.</string>
+    <string name="video_tunneling">Video tunneling</string>
+
+    <string name="d_pad_seek_mode_title">D-Pad seek bar mode</string>
+    <string name="dpad_seek_mode_minimal">Minimal</string>
+    <string name="dpad_seek_mode_trickplay">Trickplay</string>
+    <string-array name="dpad_seek_mode_options">
+        <item>@string/dpad_seek_mode_minimal</item>
+        <item>@string/dpad_seek_mode_trickplay</item>
+        <item>@string/none</item>
+    </string-array>
+    <string name="dpad_seek_mode_minimal_summary">Small seek bar along the bottom of the screen (default)</string>
+    <string name="dpad_seek_mode_trickplay_summary">Seek bar with trickplay preview images</string>
+    <string name="dpad_seek_mode_none_summary">No seek bar</string>
+    <string-array name="dpad_seek_mode_summaries">
+        <item>@string/dpad_seek_mode_minimal_summary</item>
+        <item>@string/dpad_seek_mode_trickplay_summary</item>
+        <item>@string/dpad_seek_mode_none_summary</item>
+    </string-array>
+
+    <string name="blocklisted">Blocklisted</string>
+    <string name="unavailable">Unavailable</string>
+    <string name="subtitle_mode">Subtitle mode</string>
+
+    <string name="use_user_profile">Use your profile setting</string>
+
+    <string name="subtitle_mode_default">Default</string>
+    <string name="subtitle_mode_smart">Smart</string>
+    <string name="subtitle_mode_only_forced">Only Forced</string>
+    <string name="subtitle_mode_always">Always</string>
+    <string name="subtitle_mode_none">None</string>
+    <string-array name="subtitle_mode_options">
+        <item>@string/use_user_profile</item>
+        <item>@string/subtitle_mode_default</item>
+        <item>@string/subtitle_mode_smart</item>
+        <item>@string/subtitle_mode_only_forced</item>
+        <item>@string/subtitle_mode_always</item>
+        <item>@string/subtitle_mode_none</item>
+    </string-array>
+
+    <string-array name="home_click_to_play_options">
+        <item>@string/continue_watching_click_summary_off</item>
+        <item>@string/continue_watching_click_summary_on</item>
+    </string-array>
+
+    <string name="preferred_subtitle_language">Preferred subtitle language</string>
+    <string name="preferred_audio_language">Preferred audio language</string>
+    <string name="override_user_profile_settings">More user profile settings</string>
+    <string name="override_user_profile_settings_summary">Override your user profile settings from the server</string>
+    <string name="any_language">Any language</string>
+    <string name="hash_matches">Hash matches</string>
+    <string name="subtitles_hearing_impaired">SDH</string>
+    <string name="programs">TV programs</string>
+    <string name="recordings">Recordings</string>
+    <string name="folders_title">Folders</string>
+    <string name="user_views">User views</string>
+    <string name="books">Books</string>
+    <string name="audio_books">Audio books</string>
+    <string name="server_version_not_supported">Server version not supported</string>
+    <string name="appears_on">Appears on</string>
+    <string name="dim_after_delay">Dim screen after delay</string>
+    <string name="dim_percentage">Dim percentage</string>
+    <string name="dim_screen">Dim screen</string>
+    <string name="photo_albums">Photo albums</string>
+    <string name="no_favorites_found">No favorites found!</string>
+    <string name="remove_from_playlist">Remove from playlist</string>
+    <string name="login_credentials_expired">Credentials expired, please login in again</string>
+    <string name="login_not_authorized">You are not authorized to access the server at this time</string>
+    <string name="arr_radarr">Radarr</string>
+    <string name="arr_sonarr">Sonarr</string>
+    <string name="arr_url">Server URL</string>
+    <string name="arr_api_key">API key</string>
+    <string name="arr_basic_user">Access username (optional)</string>
+    <string name="arr_basic_password">Access password (optional)</string>
+    <string name="arr_test_connection">Test connection</string>
+    <string name="arr_connected_version">%1$s %2$s ✓</string>
+    <string name="arr_quality_profile">Quality profile</string>
+    <string name="arr_root_folder">Root folder</string>
+    <string name="arr_not_set">Not set</string>
+    <string name="arr_free_space">%1$s free</string>
+    <string name="arr_error_unreachable">%1$s is unreachable</string>
+    <string name="arr_error_unauthorized">API key refused by %1$s</string>
+    <string name="arr_error_http">%1$s error (%2$d)</string>
+    <string name="arr_error_not_configured">%1$s is not configured</string>
+    <string name="arr_error_invalid">Unexpected response from %1$s</string>
+    <string name="arr_requests">Requests and ratings</string>
+    <string name="arr_radarr_summary">Movie requests</string>
+    <string name="arr_sonarr_summary">Series requests</string>
+    <string name="tmdb_request">Request</string>
+    <string name="tmdb_requested">Requested</string>
+    <string name="tmdb_downloading">Downloading %1$d%%</string>
+    <string name="tmdb_ready_soon">Available soon</string>
+    <string name="tmdb_watch">Watch</string>
+    <string name="tmdb_partial">%1$d/%2$d seasons · Request more</string>
+    <string name="tmdb_configure_radarr">Set up Radarr</string>
+    <string name="tmdb_configure_sonarr">Set up Sonarr</string>
+    <string name="tmdb_not_in_sonarr">Not found in Sonarr</string>
+    <string name="tmdb_retry">Retry</string>
+    <string name="tmdb_trailer">Trailer</string>
+    <string name="tmdb_similar">More like this</string>
+    <string name="tmdb_requested_radarr">Requested from Radarr</string>
+    <string name="tmdb_requested_sonarr">Requested from Sonarr</string>
+    <string name="tmdb_all_seasons">All seasons</string>
+    <string name="tmdb_latest_season">Latest season</string>
+    <string name="tmdb_choose_seasons">Choose…</string>
+    <string name="tmdb_season_episodes">%1$s · %2$d episodes</string>
+    <string name="tmdb_details_error">Could not load details</string>
+    <string name="tmdb_runtime">%1$dh%2$02d</string>
+    <string name="arr_error_basic_auth">Access refused by the server in front of %1$s (access username or password)</string>
+    <string name="arr_error_invalid_settings">Invalid %1$s settings (URL or key)</string>
+    <string name="tmdb_season_number">Season %1$d</string>
+    <string name="tmdb_no_trailer_app">No app available to play the trailer</string>
+    <string name="discover_popular">Popular</string>
+    <string name="discover_top_rated">Top rated</string>
+    <string name="discover_on_the_air">On the air</string>
+    <string name="discover_for_you">For you</string>
+    <string name="my_library">My library</string>
+    <string name="my_library_movies">Movies</string>
+    <string name="my_library_series">Series</string>
+    <string name="search_on_tmdb">On TMDB</string>
+    <string name="discover_genre_empty">No titles in this genre</string>
+    <string name="my_library_empty">No movies or series library on your server</string>
+    <string name="tmdb_all_seasons_requested">Every season is already requested</string>
+    <string name="tmdb_rating">★ %1$.1f</string>
+    <plurals name="tmdb_seasons">
+        <item quantity="one">%1$d season</item>
+        <item quantity="other">%1$d seasons</item>
+    </plurals>
+    <string name="browse_new">New</string>
+    <string name="browse_gems">Hidden gems</string>
+    <string name="browse_classics">Classics</string>
+    <string name="browse_all_titles">All titles</string>
+    <string name="browse_saga_all">All the movies</string>
+    <string name="discover_studios_sagas">Studios &amp; sagas</string>
+    <string name="discover_networks">Networks</string>
+    <string name="discover_studios">Studios</string>
+    <string name="discover_sagas">Sagas</string>
+    <string name="tmdb_cast">Cast</string>
+    <string name="tmdb_more">More</string>
+    <string name="tmdb_saga_format">Saga: %1$s</string>
+    <string name="tmdb_studio_format">Studio: %1$s</string>
+    <string name="tmdb_network_format">Network: %1$s</string>
+    <string name="tmdb_info">Details</string>
+    <string name="tmdb_info_made_by">Directed by</string>
+    <string name="tmdb_info_created_by">Created by</string>
+    <string name="tmdb_info_release">Release date</string>
+    <string name="tmdb_info_countries">Countries</string>
+    <string name="tmdb_info_runtime">Runtime</string>
+    <string name="tmdb_info_seasons">Seasons</string>
+    <string name="tmdb_info_budget">Budget</string>
+    <string name="tmdb_same_genre">More like this</string>
+    <string name="catalog_genre_cartoons">Cartoons</string>
+    <string name="discover_weekly_top10">Top 10 this week</string>
+    <string name="discover_platform_trending">Trending on %1$s</string>
+    <string name="discover_platform_top_rated">Top rated on %1$s</string>
+    <string name="tmdb_download_failed">Download error</string>
+    <string name="tmdb_download_failed_no_detail">Radarr / Sonarr gave no detail.</string>
+    <string name="tmdb_close">Close</string>
+    <string name="tmdb_refresh">Refresh</string>
+    <string name="tmdb_refreshing">Refreshing…</string>
+    <string name="tmdb_refresh_scan_started">Jellyfin is scanning its library…</string>
+    <string name="tmdb_refresh_scan_refused">Jellyfin did not accept the scan: the status is only rechecked.</string>
+    <string name="tmdb_resume">Resume</string>
+    <string name="tmdb_watch_episode">Watch S%1$d E%2$d</string>
+    <string name="tmdb_resume_episode">Resume S%1$d E%2$d</string>
+    <string name="tmdb_full_page">Full page (versions, tracks…)</string>
+    <string name="theme_romcom">Romantic comedies</string>
+    <string name="theme_french_comedy">French comedies</string>
+    <string name="theme_dark_comedy">Dark comedies &amp; satire</string>
+    <string name="theme_buddy">Unlikely duos</string>
+    <string name="theme_stand_up">Stand-up</string>
+    <string name="theme_family_comedy">Family comedies</string>
+    <string name="theme_heist">Heists</string>
+    <string name="theme_spy">Spies</string>
+    <string name="theme_superhero">Superheroes</string>
+    <string name="theme_psychological">Psychological thrillers</string>
+    <string name="theme_serial_killer">Serial killers</string>
+    <string name="theme_crime_thriller">Crime thrillers</string>
+    <string name="theme_time_travel">Time travel</string>
+    <string name="theme_dystopia">Dystopias</string>
+    <string name="theme_true_story">Based on a true story</string>
+    <string name="theme_biopic">Biographies</string>
+    <string name="theme_coming_of_age">Coming of age</string>
+    <string name="theme_romantic_drama">Romantic dramas</string>
+    <string name="theme_historical">Historical dramas</string>
+    <string name="theme_french_drama">French dramas</string>
+    <string name="theme_masterpieces">Masterpieces</string>
+    <string name="theme_cult_series">Cult series</string>
+    <string name="theme_french_films">French films</string>
+    <string name="theme_french_series">French series</string>
+    <string name="discover_for_you_row">Recommended for you</string>
+    <string name="discover_because_soon">Because you watched…</string>
+    <string name="discover_because">Because you watched %1$s</string>
+    <string name="catalog_for_you_movies">Movies for you</string>
+    <string name="catalog_for_you_series">Series for you</string>
+    <string name="shelf_french_films">French films</string>
+    <string name="shelf_french_comedies">French comedies</string>
+    <string name="shelf_romance">Romantic films</string>
+    <string name="shelf_emotion">Moving films</string>
+    <string name="shelf_scifi_fantasy">Sci-fi &amp; fantasy</string>
+    <string name="shelf_crime">Crime films</string>
+    <string name="shelf_blockbusters">Hollywood blockbusters</string>
+    <string name="shelf_action_adventure">Action &amp; adventure</string>
+    <string name="shelf_action_thrillers">Action thrillers</string>
+    <string name="shelf_adventure">Adventure</string>
+    <string name="shelf_recent_gems">Acclaimed recent films</string>
+    <string name="shelf_cult_90s_2000s">90s &amp; 2000s cult films</string>
+    <string name="shelf_tv_crime">Crime series</string>
+    <string name="shelf_tv_comedy">Comedy series</string>
+    <string name="shelf_tv_miniseries">Mini-series</string>
+    <string name="shelf_tv_scifi">Sci-fi &amp; fantasy series</string>
+    <string name="shelf_tv_true_story">Series based on a true story</string>
+    <string name="shelf_comedies">Comedies</string>
+    <string name="shelf_animation">Animated films</string>
+    <string name="shelf_horror">Horror films</string>
+    <string name="shelf_documentaries">Documentaries</string>
+    <string name="home_varied_styles">Varied styles</string>
+    <string name="home_watchlist">Your list</string>
+    <string name="tmdb_account">TMDB &amp; IMDb ratings</string>
+    <string name="tmdb_account_summary">Your TMDB account ratings and watchlist, including IMDb ratings synced to it</string>
+    <string name="tmdb_account_explain">Your ratings and watchlist are read from your TMDB account, including IMDb ratings synced to it (for example by an IMDb → TMDB sync you run). Link that account once: the recommendations use your ratings, rated titles are marked seen, and “Your list” shows your watchlist.</string>
+    <string name="tmdb_key">TMDB API key</string>
+    <string name="tmdb_key_built_in">Built into this version</string>
+    <string name="tmdb_key_missing">Not set: discovery needs a free TMDB key</string>
+    <string name="tmdb_key_hint">API key (v3) or read access token (v4) from themoviedb.org/settings/api. Discovery rows reload at the next launch. Leave empty to clear it.</string>
+    <string name="tmdb_key_invalid">This key looks invalid: check for spaces or missing characters</string>
+    <string name="tmdb_account_link">Link my TMDB account</string>
+    <string name="tmdb_account_scan">Scan with your phone, sign in to TMDB and press “Approve”:</string>
+    <string name="tmdb_account_approved">Done, it’s approved</string>
+    <string name="tmdb_account_cancel">Cancel</string>
+    <string name="tmdb_account_linked">Linked TMDB account: %1$s</string>
+    <string name="tmdb_account_linked_no_name">Linked</string>
+    <string name="tmdb_account_unlink">Unlink</string>
+    <string name="tmdb_account_expired">TMDB no longer accepts the session: link the account again.</string>
+    <string name="tmdb_account_not_approved">TMDB has not received the approval yet. Approve on your phone, then try again.</string>
+    <string name="tmdb_account_unreachable">TMDB cannot be reached. Try again in a moment.</string>
+    <string name="shelf_home">Shelf home</string>
+    <string name="shelf_home_on">The focused card opens wide, details under its row</string>
+    <string name="shelf_home_off">Big header above the rows</string>
+    <string name="rate_title_rated">Your rating: %1$d</string>
+    <string name="rate_saved">Rating saved: %1$d/10</string>
+    <string name="rate_removed">Rating removed</string>
+    <string name="rate_from_tv">Rate from the TV</string>
+    <string name="rate_from_tv_on">A “Rate” button on title pages</string>
+    <string name="rate_from_tv_off">Off: your ratings come from your TMDB account</string>
+    <string name="rate_title">Rate</string>
+    <string name="rate_dialog_title">Your rating for %1$s</string>
+    <string name="rate_current">Your rating: %1$s/10</string>
+    <string name="rate_remove">Remove my rating</string>
+    <string name="rate_imdb_hint">It counts at once in your recommendations. To rate it on IMDb too, scan the code and rate there.</string>
+    <string name="rate_needs_account">First link your TMDB account in Settings › TMDB &amp; IMDb ratings.</string>
+    <string name="rate_failed">The rating was not saved. Try again in a moment.</string>
+    <string name="tmdb_account_reading">Reading your ratings from TMDB…</string>
+    <string name="tmdb_account_no_ratings">No ratings received yet. Ratings appear here once they reach your TMDB account (for example through an IMDb → TMDB sync you run).</string>
+    <string name="tmdb_account_received">%1$d ratings and %2$d titles in your list, read %3$s</string>
+    <string name="tmdb_account_just_now">just now</string>
+    <string name="tmdb_account_latest">Latest ratings received: %1$s</string>
+    <string name="tmdb_account_latest_hint">Your latest rating is missing? Ratings only show up once they reach your TMDB account: check the tool that syncs them there.</string>
+    <string name="shelf_tv_drama">Drama series</string>
+    <string name="shelf_tv_mystery">Mystery series</string>
+    <string name="shelf_tv_action">Action &amp; adventure series</string>
+    <string name="shelf_tv_animation">Animated series</string>
+    <string name="shelf_tv_documentaries">Documentary series</string>
+    <string name="shelf_tv_british">British series</string>
+    <string name="shelf_tv_war_politics">War &amp; politics series</string>
+    <string name="shelf_tv_recent_gems">Acclaimed recent series</string>
+    <!-- JellyVault: translated UI texts -->
+    <string name="jv_error_generic">Something went wrong. Please try again.</string>
+    <string name="jv_error_refresh">Couldn\'t refresh</string>
+    <string name="jv_error_update_item">Couldn\'t update this title</string>
+    <string name="jv_error_update_series">Couldn\'t update this series</string>
+    <string name="jv_error_update_episode">Couldn\'t update this episode</string>
+    <string name="jv_error_refresh_home">Couldn\'t refresh the home screen</string>
+    <string name="jv_error_recording">Couldn\'t update the recording</string>
+    <string name="jv_error_playlist_add">Couldn\'t add to the playlist</string>
+    <string name="jv_error_playlist_create">Couldn\'t create the playlist</string>
+    <string name="jv_error_playlist_remove">Couldn\'t remove from the playlist</string>
+    <string name="jv_error_search">Search failed. Please try again.</string>
+    <string name="jv_error_no_episode_to_play">No episode to play</string>
+    <string name="jv_error_server_connect">Couldn\'t connect to the server</string>
+    <string name="jv_error_server_invalid">Server returned invalid response</string>
+    <string name="jv_error_screensaver_server">Can\'t reach the Jellyfin server</string>
+    <string name="jv_error_cause">Cause: %1$s</string>
+    <string name="jv_playlist_empty">The playlist is empty</string>
+    <string name="jv_mpv_unsupported">MPV isn\'t supported on this device</string>
+    <string name="jv_program_no_channel">This program has no channel</string>
+    <string name="jv_no_guide_data">No guide data found</string>
+    <string name="jv_external_player_unknown_result">Unknown response from the external player</string>
+    <string name="jv_no_items">No items</string>
+    <string name="jv_quick_connect_waiting">Waiting for a Quick Connect code…</string>
+    <string name="jv_quick_connect_instructions">Use Quick Connect on your device to sign in to %1$s</string>
+    <string name="jv_quick_connect_code_failed">Couldn\'t get a code</string>
+    <string name="jv_login_instructions">Enter your username and password to sign in to %1$s</string>
+    <string name="jv_login_trouble">Trouble signing in?</string>
+    <string name="jv_track_selected">Selected</string>
+    <string name="jv_track_type">Type</string>
+    <string name="jv_track_codec">Codec</string>
+    <string name="jv_track_supported">Supported</string>
+    <string name="jv_track_labels">Labels</string>
+    <plurals name="jv_box_set_titles">
+        <item quantity="one">%1$d title</item>
+        <item quantity="other">%1$d titles</item>
+    </plurals>
+    <string name="jv_error_title_network">Server unreachable</string>
+    <string name="jv_error_title_generic">Something went wrong</string>
+    <string name="jv_error_body_network">Check your connection and that your Jellyfin server is running.</string>
+    <string name="jv_error_body_generic">This content couldn\'t be loaded.</string>
+    <string name="jv_back">Back</string>
+    <string name="jv_details">Details</string>
+    <string name="jv_hide_details">Hide details</string>
+    <string name="jv_send_logs">Send logs</string>
+    <string name="jv_home_row_error">Couldn\'t load · press OK to retry</string>
+    <string name="tmdb_attribution" translatable="false">This product uses the TMDB API but is not endorsed or certified by TMDB.</string>
+    <string name="based_on_wholphin">Based on Wholphin by damontecres (GPL-2.0)</string>
+</resources>
