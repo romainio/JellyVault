@@ -9,7 +9,9 @@ defaults:
 
 env:
   BUILD_DIRS_ARTIFACT: build-dirs
-  GRADLE_OPTS: "-Dorg.gradle.jvmargs='-Xmx12g -XX:MaxMetaspaceSize=1024m'"
+  # Private repositories get 7 GB runners: one 5 GB Gradle JVM that also compiles Kotlin (no separate Kotlin daemon)
+  GRADLE_OPTS: "-Dorg.gradle.jvmargs='-Xmx5g -XX:MaxMetaspaceSize=1024m'"
+  KOTLIN_IN_PROCESS: "-Pkotlin.compiler.execution.strategy=in-process"
 
 jobs:
   pre-commit:
@@ -35,6 +37,6 @@ jobs:
       - name: Build app
         id: buildapp
         run: |
-          ./gradlew clean assembleDefaultDebug testDefaultDebugUnitTest --no-daemon
+          ./gradlew $KOTLIN_IN_PROCESS clean assembleDefaultDebug testDefaultDebugUnitTest --no-daemon
           apks=$(find app/build/outputs \( -name '*.apk' -or -name '*.aab' \) -print0 | tr '\0' ',' | sed 's/,$//')
           echo "apks=$apks" >> "$GITHUB_OUTPUT"
