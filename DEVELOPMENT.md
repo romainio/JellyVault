@@ -49,6 +49,16 @@ JellyVault can use the Media3 ffmpeg/av1 decoders for extra playback compatibili
 
 libMPV is not bundled: the `mpv-stub` module keeps the MPV backend compiling, and playback falls back to ExoPlayer.
 
+#### Release signing
+
+Pushing a `v*` tag runs `.github/workflows/release.yml`, which signs the release APKs with four repository secrets: `SIGNING_KEY` (the keystore, base64 without line breaks), `KEY_ALIAS`, `KEY_PASSWORD` and `KEY_STORE_PASSWORD`. Without them the build is unsigned and the signature check fails the run.
+
+To sign a local release build with the same key, set the same variables, with `KEY_STORE_FILE` pointing at the keystore instead of `SIGNING_KEY`:
+
+    KEY_STORE_FILE=/path/to/release.p12 KEY_ALIAS=... KEY_PASSWORD=... KEY_STORE_PASSWORD=... ./gradlew :app:assembleDefaultRelease
+
+Otherwise `release.signing.config=debug` in `local.properties` signs local release builds with the debug key. Android refuses an update signed with a different key than the installed app, so keep one key per device.
+
 ## Code organization
 
 Code is split into several packages:

@@ -26,11 +26,14 @@ val localProperties =
     }
 
 val isCI = providers.environmentVariable("CI").orElse("false").map { it.toBoolean() }
+
+// CI decodes the base64 SIGNING_KEY secret; a local release build points KEY_STORE_FILE at the keystore instead
+val keyStoreFile = providers.environmentVariable("KEY_STORE_FILE").orElse("")
 val shouldSign =
-    isCI.zip(
+    isCI.zip(keyStoreFile) { isCI, storeFile -> isCI || storeFile.isNotBlank() }.zip(
         providers.environmentVariable("KEY_ALIAS").orElse("").map { it.isNotBlank() },
-    ) { isCI, hasKey ->
-        isCI && hasKey
+    ) { hasStore, hasKey ->
+        hasStore && hasKey
     }
 val ffmpegModuleExists =
     providers.provider { project.file("libs/lib-decoder-ffmpeg-release.aar").exists() }
@@ -81,13 +84,14 @@ configure<ApplicationExtension> {
     signingConfigs {
         if (shouldSign.get()) {
             create("ci") {
-                file("ci.keystore").writeBytes(
-                    Base64.getDecoder().decode(System.getenv("SIGNING_KEY")),
-                )
+                storeFile =
+                    keyStoreFile.get().takeIf { it.isNotBlank() }?.let { file(it) }
+                        ?: file("ci.keystore").apply {
+                            writeBytes(Base64.getDecoder().decode(System.getenv("SIGNING_KEY")))
+                        }
                 keyAlias = System.getenv("KEY_ALIAS")
                 keyPassword = System.getenv("KEY_PASSWORD")
                 storePassword = System.getenv("KEY_STORE_PASSWORD")
-                storeFile = file("ci.keystore")
                 enableV1Signing = true
                 enableV2Signing = true
                 enableV3Signing = true
