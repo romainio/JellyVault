@@ -34,9 +34,8 @@ jobs:
           KEY_STORE_PASSWORD: "${{ secrets.KEY_STORE_PASSWORD }}"
           SIGNING_KEY: "${{ secrets.SIGNING_KEY }}"
         run: |
-          ./gradlew $KOTLIN_IN_PROCESS clean bundleAppstoreRelease
-          ./gradlew $KOTLIN_IN_PROCESS bundleFiretvRelease
-          ./gradlew $KOTLIN_IN_PROCESS assembleDefaultRelease
+          # APKs only: the appstore/firetv bundles are not published anywhere yet
+          ./gradlew $KOTLIN_IN_PROCESS clean assembleDefaultRelease
       - name: Verify signatures
         run: |
           echo "Verify APK signatures"
@@ -56,13 +55,6 @@ jobs:
         run: |
           echo "SHA256 checksums:"
           find app/build/outputs \( -name '*.apk' -or -name '*.aab' \) -print0 | xargs -0 sha256sum
-      - name: Upload AAB
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: AAB
-          path: |
-            app/build/outputs/bundle/**/*.aab
-          compression-level: 0
       - name: Upload mapping files
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
