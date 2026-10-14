@@ -66,8 +66,10 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          shopt -s globstar
-
+          # Short names only (JellyVault.apk, JellyVault-<abi>.apk): what the README and the in-app updater look for
           gh release create "${{ env.TAG_NAME }}" \
             --latest --title "${{ env.TAG_NAME }}" --verify-tag -n "" --draft \
-            app/build/outputs/apk/**/*.apk
+            app/build/outputs/apk/default/release/JellyVault.apk \
+            app/build/outputs/apk/default/release/JellyVault-arm64-v8a.apk \
+            app/build/outputs/apk/default/release/JellyVault-armeabi-v7a.apk \
+            app/build/outputs/apk/default/release/JellyVault-x86_64.apk

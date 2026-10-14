@@ -57,9 +57,13 @@ Jellyfin server.
 
 ## Installation
 
-Download the APK from [Releases](https://github.com/romainio/JellyVault/releases) once a release is published, and install it on your Android TV or Fire
-TV (allow apps from unknown sources first). Settings and sign-in survive updates installed over an app signed with the
-same key.
+Download the APK from the [latest release](https://github.com/romainio/JellyVault/releases/latest) and install it on your Android TV or Fire TV (allow apps from
+unknown sources first). `JellyVault.apk` works on every device; the smaller `JellyVault-armeabi-v7a.apk` fits most
+TVs and `JellyVault-arm64-v8a.apk` recent boxes. The app then checks GitHub for new versions, and updates keep your
+settings and sign-in.
+
+Release APKs are signed with the certificate SHA-256 `83:B0:BB:A4:E1:ED:00:73:2C:4A:42:A7:5D:90:94:95:94:69:6D:AE:9E:23:67:BA:0E:F1:47:7E:38:05:59:6A`
+(`apksigner verify --print-certs JellyVault.apk`).
 
 Requirements: Android TV or Fire TV with Android 6.0 or later, a Jellyfin server `10.10.x` or `10.11.x`. A free
 [TMDB API key](https://www.themoviedb.org/settings/api) for discovery, and Radarr/Sonarr if you want requests.
@@ -78,7 +82,6 @@ Then follow the [user guide](docs/help/en.md): Jellyfin sign-in, TMDB key in *Se
 
 ## Roadmap
 
-- **Releases on GitHub** with signed APKs and in-app updates served from GitHub.
 - **Discovery region** following the TV's country instead of France.
 - **More languages** for the JellyVault screens.
 
