@@ -4,6 +4,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -11,6 +14,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import tv.jellyvault.app.R
@@ -42,6 +46,7 @@ fun TmdbGenreCards(
     tmdbConfigured: Boolean,
     onClick: (CatalogGenre) -> Unit,
     modifier: Modifier = Modifier,
+    imagesViewModel: GenreImagesViewModel = hiltViewModel(),
 ) {
     if (!tmdbConfigured) {
         Box(modifier = modifier, contentAlignment = Alignment.Center) {
@@ -61,6 +66,8 @@ fun TmdbGenreCards(
                 .let { genres -> if (mediaType == TmdbMediaType.MOVIE) genres else genres.distinctBy { it.tvGenreId } }
                 .map { TmdbGenreItem(it, context.getString(it.titleRes)) }
         }
+    LaunchedEffect(mediaType) { imagesViewModel.init(mediaType, genres.map { it.genre }) }
+    val images by imagesViewModel.images.collectAsState()
     val gridFocusRequester = remember { FocusRequester() }
     CardGrid(
         pager = genres,
@@ -78,7 +85,7 @@ fun TmdbGenreCards(
                 // Stable id per genre so each card gets its own color
                 genreId = item?.let { UUID.nameUUIDFromBytes("tmdb-genre:${it.genre.name}".toByteArray()) },
                 name = item?.name,
-                imageUrl = null,
+                imageUrl = item?.let { images[it.genre] },
                 onClick = onClick,
                 onLongClick = onLongClick,
                 modifier = mod,

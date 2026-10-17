@@ -104,6 +104,8 @@ import tv.jellyvault.app.ui.rememberInt
 import tv.jellyvault.app.ui.theme.jv.JvColors
 import tv.jellyvault.app.ui.tryRequestFocus
 import tv.jellyvault.app.ui.util.KeepVisibleBringIntoViewSpec
+import tv.jellyvault.app.ui.util.ResArgStringProvider
+import tv.jellyvault.app.ui.util.ResStringProvider
 import tv.jellyvault.app.util.DataLoadingState
 import tv.jellyvault.app.util.ExceptionHandler
 import java.util.Locale
@@ -193,8 +195,9 @@ fun TmdbDetailPage(
 }
 
 private const val HEADER_ROW = 0
-private const val SIMILAR_ROW = HEADER_ROW + 1
-private const val SAME_GENRE_ROW = SIMILAR_ROW + 1
+private const val SAGA_ROW = HEADER_ROW + 1
+private const val SIMILAR_ROW = SAGA_ROW + 1
+private const val MORE_ROW = SIMILAR_ROW + 1
 
 /**
  * Laid out like the Jellyfin title page (MovieDetails): header, row of buttons, then rows of titles. The header is drawn
@@ -226,7 +229,7 @@ private fun TmdbDetailContent(
     // Saved with the page: coming back (eg from a similar title) restores the focus instead of jumping to the primary button
     var initialFocusDone by rememberSaveable { mutableStateOf(false) }
     val restoring = remember { initialFocusDone }
-    val focusRequesters = remember { List(SAME_GENRE_ROW + 1) { FocusRequester() } }
+    val focusRequesters = remember { List(MORE_ROW + 1) { FocusRequester() } }
     val primaryFocus = remember { FocusRequester() }
     val refreshFocus = remember { FocusRequester() }
     val retryFocus = remember { FocusRequester() }
@@ -340,15 +343,21 @@ private fun TmdbDetailContent(
                     }
                 }
                 listOf(
-                    Triple(SIMILAR_ROW, R.string.tmdb_similar, state.similar),
-                    Triple(SAME_GENRE_ROW, R.string.tmdb_same_genre, state.sameGenre),
+                    Triple(SAGA_ROW, ResStringProvider(R.string.tmdb_same_saga), state.saga),
+                    Triple(SIMILAR_ROW, ResStringProvider(R.string.tmdb_similar), state.similar),
+                    Triple(
+                        MORE_ROW,
+                        state.moreDirector?.let { ResArgStringProvider(R.string.tmdb_by_director, it) }
+                            ?: ResStringProvider(R.string.tmdb_same_genre),
+                        state.more,
+                    ),
                 ).filter { it.third.isNotEmpty() }
                     .forEach { (row, rowTitle, rowItems) ->
                         item(key = "row_$row") {
                             CompositionLocalProvider(LocalBringIntoViewSpec provides defaultBringIntoViewSpec) {
                                 // Same cards as the « More like this » row of the Jellyfin page
                                 ItemRow(
-                                    title = stringResource(rowTitle),
+                                    title = rowTitle.getString(),
                                     items = rowItems,
                                     onClickItem = { _, similar ->
                                         position = row

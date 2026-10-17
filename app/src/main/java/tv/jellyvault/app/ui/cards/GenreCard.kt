@@ -11,9 +11,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -93,11 +95,10 @@ fun GenreCard(
                             .data(imageUrl)
                             .crossfade(true)
                             .build(),
-                    contentScale = ContentScale.FillBounds,
+                    contentScale = ContentScale.Crop,
                     contentDescription = null,
                     modifier =
                         Modifier
-                            .alpha(.75f)
                             .aspectRatio(AspectRatios.WIDE)
                             .fillMaxSize(),
                 )
@@ -107,12 +108,16 @@ fun GenreCard(
                     Modifier
                         .aspectRatio(AspectRatios.WIDE)
                         .fillMaxSize()
-                        .background(background),
+                        // A picture keeps its colors under a dark veil that keeps the name readable
+                        .background(if (imageUrl != null) IMAGE_VEIL else SolidColor(background)),
             ) {
                 Text(
                     text = name ?: "",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.titleLarge,
+                    color = if (imageUrl != null) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                    style =
+                        MaterialTheme.typography.titleLarge.copy(
+                            shadow = if (imageUrl != null) Shadow(Color.Black, blurRadius = 8f) else null,
+                        ),
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center,
                     modifier =
@@ -124,6 +129,8 @@ fun GenreCard(
         }
     }
 }
+
+private val IMAGE_VEIL = Brush.verticalGradient(listOf(Color.Black.copy(alpha = .25f), Color.Black.copy(alpha = .65f)))
 
 @PreviewTvSpec
 @Composable

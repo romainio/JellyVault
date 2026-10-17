@@ -31,8 +31,8 @@ class RecommendedTitles
             val tmdbId = LibraryIndex.parseTmdbId(providerIds) ?: return emptyList()
             return try {
                 val details = tmdb.details(mediaType, tmdbId)
-                val candidates = details.recommendations.ifEmpty { details.similarTitles }
-                catalog.cards(candidates.filterNot { it.tmdbId == tmdbId && it.mediaType == mediaType }).map { it.toBaseItem() }
+                // TMDB "similar" is mostly unrelated titles: recommendations only, kept to the same kind of title
+                catalog.cards(fittingRecommendations(details, details.recommendations, emptySet())).map { it.toBaseItem() }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

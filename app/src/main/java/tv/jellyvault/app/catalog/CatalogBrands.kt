@@ -118,3 +118,128 @@ fun relatedStudios(genre: CatalogGenre): List<CatalogStudio> =
         CatalogGenre.DRAMA -> listOf(CatalogStudio.A24)
         else -> emptyList()
     }
+
+/**
+ * A saga shown as a row of its studio's page; [name] until TMDB gives the localized one
+ */
+data class StudioSaga(
+    val collectionId: Int,
+    val name: String,
+)
+
+/**
+ * Sagas of a studio page, most famous first (TMDB collection ids)
+ */
+fun studioSagas(companyId: Int?): List<StudioSaga> =
+    when (companyId) {
+        // Marvel Studios
+        420 -> {
+            listOf(
+                StudioSaga(86311, "Avengers"),
+                StudioSaga(131292, "Iron Man"),
+                StudioSaga(131295, "Captain America"),
+                StudioSaga(131296, "Thor"),
+                StudioSaga(284433, "Guardians of the Galaxy"),
+                StudioSaga(531241, "Spider-Man (MCU)"),
+                StudioSaga(529892, "Black Panther"),
+                StudioSaga(422834, "Ant-Man"),
+                StudioSaga(618529, "Doctor Strange"),
+            )
+        }
+
+        // Lucasfilm
+        1 -> {
+            listOf(StudioSaga(10, "Star Wars"), StudioSaga(84, "Indiana Jones"))
+        }
+
+        // Pixar
+        3 -> {
+            listOf(
+                StudioSaga(10194, "Toy Story"),
+                StudioSaga(468222, "The Incredibles"),
+                StudioSaga(137697, "Finding Nemo"),
+                StudioSaga(87118, "Cars"),
+                StudioSaga(137696, "Monsters, Inc."),
+            )
+        }
+
+        // Walt Disney Pictures
+        2 -> {
+            listOf(StudioSaga(295, "Pirates of the Caribbean"))
+        }
+
+        // Walt Disney Animation Studios
+        6125 -> {
+            listOf(StudioSaga(386382, "Frozen"))
+        }
+
+        // DreamWorks Animation
+        521 -> {
+            listOf(
+                StudioSaga(2150, "Shrek"),
+                StudioSaga(77816, "Kung Fu Panda"),
+                StudioSaga(98874, "How to Train Your Dragon"),
+                StudioSaga(14740, "Madagascar"),
+            )
+        }
+
+        // Illumination
+        6704 -> {
+            listOf(StudioSaga(86066, "Despicable Me"), StudioSaga(544669, "Minions"))
+        }
+
+        // Warner Bros. Pictures
+        174 -> {
+            listOf(
+                StudioSaga(1241, "Harry Potter"),
+                StudioSaga(435259, "Fantastic Beasts"),
+                StudioSaga(263, "The Dark Knight"),
+                StudioSaga(2344, "The Matrix"),
+                StudioSaga(8945, "Mad Max"),
+            )
+        }
+
+        // Universal Pictures
+        33 -> {
+            listOf(StudioSaga(328, "Jurassic Park"), StudioSaga(9485, "Fast & Furious"), StudioSaga(264, "Back to the Future"))
+        }
+
+        // Paramount Pictures
+        4 -> {
+            listOf(StudioSaga(87359, "Mission: Impossible"), StudioSaga(8650, "Transformers"))
+        }
+
+        // 20th Century Studios
+        127928 -> {
+            listOf(
+                StudioSaga(87096, "Avatar"),
+                StudioSaga(8091, "Alien"),
+                StudioSaga(173710, "Planet of the Apes"),
+                StudioSaga(8354, "Ice Age"),
+            )
+        }
+
+        // Lionsgate
+        1632 -> {
+            listOf(StudioSaga(131635, "The Hunger Games"), StudioSaga(404609, "John Wick"))
+        }
+
+        // Gaumont
+        9 -> {
+            listOf(StudioSaga(52888, "Les Visiteurs"))
+        }
+
+        // Pathé
+        7981 -> {
+            listOf(StudioSaga(2396, "Astérix & Obélix"))
+        }
+
+        else -> {
+            emptyList()
+        }
+    }
+
+private val COLLECTION_SUFFIX = Regex("""\s*([-–:]\s*)?(Saga|Collection|Colección|Filmreihe)$""", RegexOption.IGNORE_CASE)
+
+/** "Avengers - Saga", "The Avengers Collection" → "Avengers", "The Avengers" */
+fun collectionRowName(tmdbName: String): String = tmdbName.replace(COLLECTION_SUFFIX, "").trim().ifEmpty { tmdbName }

@@ -32,12 +32,14 @@ data class TmdbItem(
 ) {
     val year: Int? get() = releaseDate?.take(4)?.toIntOrNull()
 
-    val posterUrl: String get() = "$IMAGE_BASE_URL/w342$posterPath"
+    /** Cards are about 230 px wide and grow on focus: w342 looked soft once scaled */
+    val posterUrl: String get() = "$IMAGE_BASE_URL/w500$posterPath"
 
-    val backdropUrl: String? get() = backdropPath?.let { "$IMAGE_BASE_URL/w780$it" }
+    /** The home and browse headers draw it full-screen: w780 looked soft on a 1080p TV */
+    val backdropUrl: String? get() = backdropPath?.let { "$IMAGE_BASE_URL/w1280$it" }
 
-    /** Full-screen backdrop of the title page: w780 looks soft on a 1080p TV */
-    val detailBackdropUrl: String? get() = backdropPath?.let { "$IMAGE_BASE_URL/w1280$it" }
+    /** Full-screen backdrop of the title page */
+    val detailBackdropUrl: String? get() = backdropUrl
 
     companion object {
         const val IMAGE_BASE_URL = "https://image.tmdb.org/t/p"

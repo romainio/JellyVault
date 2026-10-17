@@ -9,6 +9,7 @@ import tv.jellyvault.app.catalog.library.LibraryItemSource
 import tv.jellyvault.app.catalog.library.TmdbKey
 import tv.jellyvault.app.catalog.shelves.Shelf
 import tv.jellyvault.app.catalog.tmdb.TmdbClient
+import tv.jellyvault.app.catalog.tmdb.TmdbDetails
 import tv.jellyvault.app.catalog.tmdb.TmdbDiscoverQuery
 import tv.jellyvault.app.catalog.tmdb.TmdbItem
 import tv.jellyvault.app.catalog.tmdb.TmdbListType
@@ -61,6 +62,24 @@ class CatalogRepository
             val inTop = top.map { it.key }.toSet()
             return toCards(top + trending.filterNot { it.key in inTop })
         }
+
+        /**
+         * The search page before anything is typed: this week's trending movies and series, mixed (about 80 titles)
+         */
+        suspend fun searchMosaic(): List<MediaCard> =
+            coroutineScope {
+                val movies =
+                    async {
+                        tmdb.trending(TmdbMediaType.MOVIE).mainstream() +
+                            secondPage { tmdb.trending(TmdbMediaType.MOVIE, 2).mainstream() }
+                    }
+                val series =
+                    async {
+                        tmdb.trending(TmdbMediaType.TV).mainstream() +
+                            secondPage { tmdb.trending(TmdbMediaType.TV, 2).mainstream() }
+                    }
+                toCards(interleave(movies.await(), series.await()))
+            }
 
         /**
          * About 40 titles of a home style: two TMDB pages, without the obscure foreign-language titles
@@ -139,6 +158,68 @@ class CatalogRepository
         suspend fun searchCards(query: String): List<MediaCard> = toCards(tmdb.search(query).items)
 
         suspend fun queryRow(query: TmdbDiscoverQuery): List<MediaCard> = toCards(tmdb.discover(query).items.forQuery(query))
+
+        /**
+         * [query] without the titles of the rows above it ([exclude]), empty when too few are left to make a row worth showing
+         */
+        suspend fun queryRow(
+            query: TmdbDiscoverQuery,
+            exclude: List<TmdbDiscoverQuery>,
+        ): List<MediaCard> {
+            val items = tmdb.discover(query).items.forQuery(query)
+            if (exclude.isEmpty()) return toCards(items)
+            // Same requests as the rows above: answered from the TMDB cache
+            val shown = exclude.flatMap { tmdb.discover(it).items.forQuery(it) }.map { it.key }.toSet()
+            val rest = items.filterNot { it.key in shown }
+            return if (rest.size < MIN_DISTINCT_TITLES) emptyList() else toCards(rest)
+        }
+
+        /**
+         * The rows under a TMDB title page, see [TitlePageRows]. A row that fails stays empty, the others still show.
+         */
+        suspend fun titleRows(details: TmdbDetails): TitlePageRows {
+            val self = details.item.key
+            val saga =
+                details.collection
+                    ?.takeIf { details.item.mediaType == TmdbMediaType.MOVIE }
+                    ?.let { orEmpty("Saga row") { tmdb.collection(it.id).parts } }
+                    .orEmpty()
+                    .filter { it.key != self }
+            val similar = fittingRecommendations(details, details.recommendations, saga.map { it.key }.toSet())
+            val shown = (saga + similar).map { it.key }.toSet() + self
+            val byDirector =
+                details.director
+                    ?.let { director -> orEmpty("Director row") { tmdb.discover(directorQuery(director)).items } }
+                    .orEmpty()
+                    .filter { it.key !in shown }
+            val (more, director) =
+                if (byDirector.size >= DIRECTOR_MIN_TITLES) {
+                    byDirector to details.director
+                } else {
+                    val sameGenre =
+                        sameGenreQuery(details)?.let { query ->
+                            orEmpty("Same genre row") { tmdb.discover(query).items.forQuery(query) }
+                        }
+                    sameGenre.orEmpty().filter { it.key !in shown } to null
+                }
+            return TitlePageRows(saga = toCards(saga), similar = toCards(similar), more = toCards(more), director = director)
+        }
+
+        private suspend fun orEmpty(
+            what: String,
+            fetch: suspend () -> List<TmdbItem>,
+        ): List<TmdbItem> =
+            try {
+                fetch()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Timber.w(e, "%s failed", what)
+                emptyList()
+            }
+
+        /** The name TMDB gives a collection, in the interface language */
+        suspend fun collectionName(id: Int): String = tmdb.collection(id).name
 
         /**
          * One page of [query], with the total number of pages
@@ -236,6 +317,9 @@ class CatalogRepository
             }
         }
     }
+
+/** A row that only repeats the rows above it, but for a few titles, is not shown */
+internal const val MIN_DISTINCT_TITLES = 8
 
 /**
  * Titles the user has seen (rated on IMDb), never waiting on the network

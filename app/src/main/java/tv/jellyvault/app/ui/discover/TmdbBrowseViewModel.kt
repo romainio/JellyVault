@@ -16,12 +16,14 @@ import tv.jellyvault.app.catalog.BrowseRowSpec
 import tv.jellyvault.app.catalog.BrowseTarget
 import tv.jellyvault.app.catalog.CatalogRepository
 import tv.jellyvault.app.catalog.browseRows
+import tv.jellyvault.app.catalog.collectionRowName
 import tv.jellyvault.app.catalog.gridQuery
 import tv.jellyvault.app.catalog.toBaseItem
 import tv.jellyvault.app.data.model.BaseItem
 import tv.jellyvault.app.services.BackdropService
 import tv.jellyvault.app.services.NavigationManager
 import tv.jellyvault.app.ui.launchIO
+import tv.jellyvault.app.ui.util.StringStringProvider
 import tv.jellyvault.app.util.HomeRowLoadingState
 import java.time.LocalDate
 import javax.inject.Inject
@@ -96,11 +98,16 @@ class TmdbBrowseViewModel
                         try {
                             val cards =
                                 when (val kind = spec.kind) {
-                                    is BrowseRowKind.Query -> catalogRepository.queryRow(kind.query)
+                                    is BrowseRowKind.Query -> catalogRepository.queryRow(kind.query, kind.exclude)
                                     is BrowseRowKind.SagaParts -> catalogRepository.sagaRow(kind.saga)
                                     is BrowseRowKind.CollectionParts -> catalogRepository.collectionRow(kind.collectionId)
                                 }
-                            HomeRowLoadingState.Success(spec.title, cards.map { it.toBaseItem() }, showViewMore = false)
+                            val title =
+                                (spec.kind as? BrowseRowKind.CollectionParts)
+                                    ?.takeIf { spec.titleFromCollection }
+                                    ?.let { StringStringProvider(collectionRowName(catalogRepository.collectionName(it.collectionId))) }
+                                    ?: spec.title
+                            HomeRowLoadingState.Success(title, cards.map { it.toBaseItem() }, showViewMore = false)
                         } catch (e: CancellationException) {
                             throw e
                         } catch (e: Exception) {

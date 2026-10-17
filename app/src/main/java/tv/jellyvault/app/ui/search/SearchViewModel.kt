@@ -28,6 +28,7 @@ import org.jellyfin.sdk.model.api.request.GetItemsRequest
 import timber.log.Timber
 import tv.jellyvault.app.R
 import tv.jellyvault.app.catalog.CatalogRepository
+import tv.jellyvault.app.catalog.toBaseItem
 import tv.jellyvault.app.data.ServerRepository
 import tv.jellyvault.app.data.model.BaseItem
 import tv.jellyvault.app.preferences.AppPreferences
@@ -79,7 +80,7 @@ class SearchViewModel
         private val liveTvService: LiveTvService,
         private val keyValueService: KeyValueService,
         private val navDrawerService: NavDrawerService,
-        catalogRepository: CatalogRepository,
+        private val catalogRepository: CatalogRepository,
     ) : ViewModel(),
         ContextMenuProvider {
         private val _state = MutableStateFlow(SearchState())
@@ -100,6 +101,11 @@ class SearchViewModel
             combine(state.map { it.combinedResults }.distinctUntilChanged(), tmdbSearch.results, ::mergeSearchResults)
                 .stateIn(viewModelScope, SharingStarted.Eagerly, SearchResult.NoQuery)
 
+        private val _mosaic = MutableStateFlow<List<BaseItem>>(emptyList())
+
+        /** What the page shows before anything is typed: trending movies and series */
+        val mosaic: StateFlow<List<BaseItem>> = _mosaic
+
         private var currentQuery: String? = null
         private var combinedMode = false
 
@@ -110,6 +116,20 @@ class SearchViewModel
 
         init {
             init()
+            loadMosaic()
+        }
+
+        private fun loadMosaic() {
+            if (!catalogRepository.isConfigured) return
+            viewModelScope.launchIO {
+                try {
+                    _mosaic.value = catalogRepository.searchMosaic().map { it.toBaseItem() }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Timber.w(e, "No search mosaic")
+                }
+            }
         }
 
         private fun init() {

@@ -41,6 +41,10 @@ private const val CRIME = 80
 private const val FAMILY = 10751
 private const val HISTORY = 36
 private const val DRAMA = 18
+private const val ANIMATION = 16
+
+/** Keyword rows of live-action genres match cartoons too (Cars 2 is a spy film): kept out */
+private val NO_CARTOONS = listOf(ANIMATION, FAMILY)
 
 private const val THEME_MIN_VOTES_MOVIE = 300
 private const val THEME_MIN_VOTES_TV = 100
@@ -56,6 +60,7 @@ private fun theme(
     keywordIds: List<Int> = emptyList(),
     originCountry: String? = null,
     minVotes: Int = minVotes(type),
+    withoutGenreIds: List<Int> = emptyList(),
 ) = ThemeRow(
     title,
     TmdbDiscoverQuery(
@@ -66,6 +71,8 @@ private fun theme(
         originCountry = originCountry,
         minVotes = minVotes,
         mainstreamOnly = true,
+        // A row about one genre ("family comedies") keeps it
+        withoutGenreIds = withoutGenreIds - andGenreIds.toSet(),
     ),
 )
 
@@ -80,19 +87,20 @@ fun genreThemes(
     if (genre.companyIds.isNotEmpty()) return emptyList()
     val id = (if (type == TmdbMediaType.MOVIE) genre.movieGenreId else genre.tvGenreId) ?: return emptyList()
     val movie = type == TmdbMediaType.MOVIE
+    val without = if (genre == CatalogGenre.ANIMATION || genre == CatalogGenre.FAMILY) emptyList() else NO_CARTOONS
 
     fun kw(
         title: Int,
         vararg keywords: Int,
         votes: Int = minVotes(type),
-    ) = theme(title, type, id, keywordIds = keywords.toList(), minVotes = votes)
+    ) = theme(title, type, id, keywordIds = keywords.toList(), minVotes = votes, withoutGenreIds = without)
 
     fun with(
         title: Int,
         vararg genres: Int,
-    ) = theme(title, type, id, andGenreIds = genres.toList())
+    ) = theme(title, type, id, andGenreIds = genres.toList(), withoutGenreIds = without)
 
-    fun country(title: Int) = theme(title, type, id, originCountry = "FR")
+    fun country(title: Int) = theme(title, type, id, originCountry = "FR", withoutGenreIds = without)
     val trueStory = kw(R.string.theme_true_story, Keyword.TRUE_STORY)
     val serialKiller = kw(R.string.theme_serial_killer, Keyword.SERIAL_KILLER)
     return when (genre) {

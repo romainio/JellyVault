@@ -7,6 +7,8 @@ import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import tv.jellyvault.app.catalog.CatalogFilter
+import tv.jellyvault.app.catalog.withinCatalogFilter
 import tv.jellyvault.app.services.hilt.StandardOkHttpClient
 import tv.jellyvault.app.util.JvDispatchers
 import java.io.IOException
@@ -44,12 +46,16 @@ class TmdbClient
         /** Read at each request: the interface language can change while the app runs */
         internal var language: () -> TmdbLanguage = TmdbLanguage::current
 
+        /** The user's limits on suggestions, read at each request: applied after the cache, which keeps raw pages */
+        internal var filter: () -> CatalogFilter = { CatalogFilter.current }
+
         val isConfigured: Boolean get() = TmdbAuth.of(credential.current()) != null
 
         suspend fun trending(
             mediaType: TmdbMediaType,
             page: Int = 1,
-        ): List<TmdbItem> = getList("trending/${mediaType.path}/week", mapOf("page" to page.toString()), mediaType)
+        ): List<TmdbItem> =
+            getList("trending/${mediaType.path}/week", mapOf("page" to page.toString()), mediaType).withinCatalogFilter(filter())
 
         suspend fun discover(
             mediaType: TmdbMediaType,
@@ -64,18 +70,7 @@ class TmdbClient
             genreId: Int,
             page: Int,
         ): TmdbResultPage =
-            getPage(
-                "discover/${mediaType.path}",
-                mapOf(
-                    "with_genres" to genreId.toString(),
-                    "sort_by" to "popularity.desc",
-                    "vote_average.gte" to MIN_VOTE_AVERAGE,
-                    "vote_count.gte" to MIN_VOTE_COUNT,
-                    "include_adult" to "false",
-                    "page" to page.toString(),
-                ),
-                mediaType,
-            )
+            discover(TmdbDiscoverQuery(mediaType, genreId = genreId, minVotes = MIN_VOTE_COUNT, minRating = MIN_VOTE_AVERAGE), page)
 
         /**
          * One page of a discover [query] (20 titles)
@@ -83,7 +78,10 @@ class TmdbClient
         suspend fun discover(
             query: TmdbDiscoverQuery,
             page: Int = 1,
-        ): TmdbResultPage = getPage("discover/${query.mediaType.path}", query.params(page), query.mediaType)
+        ): TmdbResultPage {
+            val filtered = filter().apply(query) ?: return TmdbResultPage(emptyList(), page, 0)
+            return getPage("discover/${query.mediaType.path}", filtered.params(page), query.mediaType)
+        }
 
         /**
          * A TMDB list (popular, top rated, now playing for movies, on the air for series)
@@ -113,7 +111,11 @@ class TmdbClient
                         "tv/on_the_air"
                     }
                 }
-            return getPage(path, mapOf("page" to page.toString()), mediaType)
+            return getPage(
+                path,
+                mapOf("page" to page.toString()),
+                mediaType,
+            ).let { it.copy(items = it.items.withinCatalogFilter(filter())) }
         }
 
         /**
@@ -135,7 +137,7 @@ class TmdbClient
         suspend fun recommendations(
             mediaType: TmdbMediaType,
             tmdbId: Int,
-        ): List<TmdbItem> = getList("${mediaType.path}/$tmdbId/recommendations", emptyMap(), mediaType)
+        ): List<TmdbItem> = getList("${mediaType.path}/$tmdbId/recommendations", emptyMap(), mediaType).withinCatalogFilter(filter())
 
         suspend fun details(
             mediaType: TmdbMediaType,
@@ -158,12 +160,20 @@ class TmdbClient
                 )
             val key = url.toString()
             detailsCache[key]?.let { (time, details) ->
-                if (now() - time < CACHE_TTL_MS) return details
+                if (now() - time < CACHE_TTL_MS) return details.withinFilter()
             }
             val raw = getJson<TmdbRawDetails>(url, path)
             val details = raw.toDetails(mediaType, lang) ?: throw TmdbException("TMDB title $path has no title or poster")
             detailsCache[key] = now() to details
-            return details
+            return details.withinFilter()
+        }
+
+        private fun TmdbDetails.withinFilter(): TmdbDetails {
+            val filter = filter()
+            return copy(
+                recommendations = recommendations.withinCatalogFilter(filter),
+                similarTitles = similarTitles.withinCatalogFilter(filter),
+            )
         }
 
         suspend fun collection(id: Int): TmdbCollection =
@@ -268,8 +278,8 @@ class TmdbClient
 
             const val BASE_URL = "https://api.themoviedb.org/3/"
             const val REGION = "FR"
-            const val MIN_VOTE_AVERAGE = "5"
-            const val MIN_VOTE_COUNT = "200"
+            const val MIN_VOTE_AVERAGE = 5.0
+            const val MIN_VOTE_COUNT = 200
             const val TIMEOUT_SECONDS = 10L
             const val CACHE_TTL_MS = 6 * 60 * 60 * 1000L
         }

@@ -211,6 +211,24 @@ message InterfacePreferences {
   reserved 17;
   // JellyVault: home rows where the focused card opens wide, details under the row
   bool shelf_home = 18;
+  // JellyVault: which TMDB titles the catalog rows suggest, and which personal rows show
+  CatalogPreferences catalog_preferences = 19;
+}
+
+// How well known a suggested title must be: scales the vote floor of every TMDB row
+enum CatalogPopularity {
+  POPULARITY_BALANCED = 0;
+  POPULARITY_DISCOVERY = 1;
+  POPULARITY_HITS = 2;
+}
+
+message CatalogPreferences {
+  // No TMDB suggestion released before this year; 0 for no limit
+  int32 min_year = 1;
+  CatalogPopularity popularity = 2;
+  // Hidden rows, so the default (false) keeps them
+  bool hide_continue_watching = 3;
+  bool hide_recently_added = 4;
 }
 
 message AdvancedPreferences {

@@ -79,8 +79,8 @@ class TmdbClientTest {
             assertEquals("Vice-versa 2", first.title)
             assertEquals(TmdbMediaType.MOVIE, first.mediaType)
             assertEquals(2024, first.year)
-            assertEquals("https://image.tmdb.org/t/p/w342/poster1.jpg", first.posterUrl)
-            assertEquals("https://image.tmdb.org/t/p/w780/backdrop1.jpg", first.backdropUrl)
+            assertEquals("https://image.tmdb.org/t/p/w500/poster1.jpg", first.posterUrl)
+            assertEquals("https://image.tmdb.org/t/p/w1280/backdrop1.jpg", first.backdropUrl)
             assertNull(items[1].backdropUrl)
 
             val request = fake.requests.single()
@@ -172,7 +172,7 @@ class TmdbClientTest {
             val url = fake.requests.single().url
             assertEquals("28", url.queryParameter("with_genres"))
             assertEquals("popularity.desc", url.queryParameter("sort_by"))
-            assertEquals("5", url.queryParameter("vote_average.gte"))
+            assertEquals("5.0", url.queryParameter("vote_average.gte"))
             assertEquals("200", url.queryParameter("vote_count.gte"))
             assertEquals("false", url.queryParameter("include_adult"))
         }

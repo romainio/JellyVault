@@ -15,7 +15,9 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.selects.select
@@ -31,6 +33,8 @@ import org.jellyfin.sdk.model.api.ImageType
 import org.jellyfin.sdk.model.api.UserDto
 import timber.log.Timber
 import tv.jellyvault.app.R
+import tv.jellyvault.app.catalog.hiddenRows
+import tv.jellyvault.app.catalog.isHiddenBy
 import tv.jellyvault.app.catalog.shelves.ShelfScope
 import tv.jellyvault.app.catalog.shelves.ShelfSource
 import tv.jellyvault.app.catalog.shelves.dueRows
@@ -105,7 +109,15 @@ class HomeViewModel
             datePlayedService.invalidateAll()
             serverRepository.currentUserDtoFlow
                 .combinePair(homeSettingsService.currentSettings)
-                .collectLatestIn(viewModelScope) { (userDto, settings) ->
+                // Showing or hiding "Continue watching" / "Recently added" reloads the rows
+                .combinePair(
+                    userPreferencesService.flow
+                        .map {
+                            it.appPreferences.interfacePreferences.catalogPreferences
+                                .hiddenRows()
+                        }.distinctUntilChanged(),
+                ).collectLatestIn(viewModelScope) { (userAndSettings, _) ->
+                    val (userDto, settings) = userAndSettings
                     Timber.v(
                         "Got new userDto & settings, userId=%s, settings?=%s",
                         userDto?.id,
@@ -183,6 +195,10 @@ class HomeViewModel
             try {
                 val preferences = userPreferencesService.getCurrent()
                 val prefs = preferences.appPreferences.homePagePreferences
+                val hidden =
+                    preferences.appPreferences.interfacePreferences.catalogPreferences
+                        .hiddenRows()
+                val shownRows = settings.rows.filterNot { it.config.isHiddenBy(hidden) }
 
                 val libraries =
                     navDrawerService.getAllUserLibraries(userDto.id, userDto.tvAccess)
@@ -191,7 +207,7 @@ class HomeViewModel
 
                 // "Styles variés" becomes the styles planned for this period (frozen, no network)
                 val rows =
-                    if (settings.rows.any { it.config is HomeRowConfig.TmdbShelves }) {
+                    if (shownRows.any { it.config is HomeRowConfig.TmdbShelves }) {
                         val plan =
                             try {
                                 shelfSource.plan(ShelfScope.HOME)
@@ -201,9 +217,9 @@ class HomeViewModel
                                 Timber.w(ex, "No shelf plan")
                                 emptyList()
                             }
-                        expandShelfRows(settings.rows, plan)
+                        expandShelfRows(shownRows, plan)
                     } else {
-                        settings.rows
+                        shownRows
                     }
                 expandedRows = rows
 

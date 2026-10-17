@@ -18,6 +18,7 @@ import tv.jellyvault.app.catalog.CatalogGenre
 import tv.jellyvault.app.catalog.CatalogMediaType
 import tv.jellyvault.app.catalog.CatalogRepository
 import tv.jellyvault.app.catalog.CatalogStudio
+import tv.jellyvault.app.catalog.HiddenRows
 import tv.jellyvault.app.catalog.shelves.ShelfCatalog
 import tv.jellyvault.app.catalog.shelves.ShelfScope
 import tv.jellyvault.app.catalog.shelves.ShelfSource
@@ -161,7 +162,13 @@ class DiscoverViewModel
                             emptyList()
                         }
                     if (loading != generation) return@launch
-                    val specs = specsFor(mediaType, catalogRepository.isConfigured, shelfPlan = plan)
+                    val specs =
+                        specsFor(
+                            mediaType,
+                            catalogRepository.isConfigured,
+                            shelfPlan = plan,
+                            showContinue = !HiddenRows.current.continueWatching,
+                        )
                     rowSpecs = specs
                     _rows.value = specs.map { HomeRowLoadingState.Pending(it.title) }
                     loadVisible()
@@ -321,12 +328,14 @@ class DiscoverViewModel
                 tmdbConfigured: Boolean,
                 today: LocalDate = LocalDate.now(),
                 shelfPlan: List<String> = emptyList(),
+                showContinue: Boolean = true,
             ): List<DiscoverRowSpec> {
-                val continueRow = DiscoverRowSpec(DiscoverRowKind.Continue, ResStringProvider(R.string.continue_watching))
-                if (!tmdbConfigured) return listOf(continueRow)
+                val continueRow =
+                    DiscoverRowSpec(DiscoverRowKind.Continue, ResStringProvider(R.string.continue_watching)).takeIf { showContinue }
+                if (!tmdbConfigured) return listOfNotNull(continueRow)
                 val movie = mediaType == TmdbMediaType.MOVIE
                 return buildList {
-                    add(continueRow)
+                    continueRow?.let(::add)
                     add(
                         DiscoverRowSpec(
                             DiscoverRowKind.Trending,

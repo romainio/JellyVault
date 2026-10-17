@@ -138,7 +138,7 @@ class TmdbListsTest {
             val url = fake.requests.single().url
             assertEquals("2", url.queryParameter("page"))
             assertEquals("28", url.queryParameter("with_genres"))
-            assertEquals("5", url.queryParameter("vote_average.gte"))
+            assertEquals("5.0", url.queryParameter("vote_average.gte"))
             assertEquals("200", url.queryParameter("vote_count.gte"))
             assertEquals("popularity.desc", url.queryParameter("sort_by"))
         }

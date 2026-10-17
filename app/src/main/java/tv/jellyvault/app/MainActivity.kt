@@ -47,6 +47,9 @@ import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
 import org.jellyfin.sdk.model.serializer.toUUIDOrNull
 import timber.log.Timber
+import tv.jellyvault.app.catalog.CatalogFilter
+import tv.jellyvault.app.catalog.HiddenRows
+import tv.jellyvault.app.catalog.hiddenRows
 import tv.jellyvault.app.data.ServerRepository
 import tv.jellyvault.app.preferences.AppPreferences
 import tv.jellyvault.app.preferences.PlayerBackend
@@ -231,6 +234,8 @@ class MainActivity : AppCompatActivity() {
         userPreferencesDataStore.data.collectLatestIn(lifecycleScope) { prefs ->
             signInAuto = prefs.signInAutomatically
             playerBackend = prefs.playbackPreferences.playerBackend
+            CatalogFilter.current = CatalogFilter.of(prefs.interfacePreferences.catalogPreferences)
+            HiddenRows.current = prefs.interfacePreferences.catalogPreferences.hiddenRows()
         }
 
         viewModel.appStart(intent)

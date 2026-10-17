@@ -243,6 +243,11 @@ inline fun AppPreferences.updateLiveTvPreferences(block: LiveTvPreferences.Build
         liveTvPreferences = liveTvPreferences.toBuilder().apply(block).build()
     }
 
+inline fun AppPreferences.updateCatalogPreferences(block: CatalogPreferences.Builder.() -> Unit): AppPreferences =
+    updateInterfacePreferences {
+        catalogPreferences = catalogPreferences.toBuilder().apply(block).build()
+    }
+
 inline fun AppPreferences.updateAdvancedPreferences(block: AdvancedPreferences.Builder.() -> Unit): AppPreferences =
     update {
         advancedPreferences = advancedPreferences.toBuilder().apply(block).build()

@@ -48,6 +48,10 @@ data class TmdbDetails(
     val similarTitles: List<TmdbItem> = emptyList(),
     /** tt…, to open the title on IMDb */
     val imdbId: String? = null,
+    /** TMDB genre ids of the title, to keep its "similar" rows in the same kind of film */
+    val genreIds: List<Int> = emptyList(),
+    /** The first director of a movie, for a "Directed by" row */
+    val director: TmdbNamed? = null,
 ) {
     val trailerUrl: String? get() = trailerKey?.let { "https://www.youtube.com/watch?v=$it" }
 }
@@ -67,6 +71,7 @@ internal data class TmdbRawVideos(
 
 @Serializable
 internal data class TmdbRawGenre(
+    val id: Int = 0,
     val name: String,
 )
 
@@ -86,6 +91,7 @@ internal data class TmdbRawCast(
 
 @Serializable
 internal data class TmdbRawCrew(
+    val id: Int = 0,
     val name: String,
     val job: String? = null,
 )
@@ -244,6 +250,13 @@ internal data class TmdbRawDetails(
             budget = budget?.takeIf { it > 0 },
             episodeCount = numberOfEpisodes?.takeIf { it > 0 },
             similarTitles = similar.results.mapNotNull { it.toItem(mediaType) },
+            genreIds = genres.map { it.id }.filter { it > 0 },
+            director =
+                if (mediaType == TmdbMediaType.MOVIE) {
+                    credits.crew.firstOrNull { it.job == "Director" && it.id > 0 }?.let { TmdbNamed(it.id, it.name) }
+                } else {
+                    null
+                },
         )
     }
 

@@ -999,6 +999,40 @@
     <string name="browse_classics">Classics</string>
     <string name="browse_all_titles">All titles</string>
     <string name="browse_saga_all">All the movies</string>
+    <string name="browse_release_order">In release order</string>
+    <string name="disney_animated_classics">Animated classics</string>
+    <string name="disney_recent_animation">Disney animation</string>
+    <string name="disney_princesses">Princesses and fairy tales</string>
+    <string name="disney_live_remakes">Live-action remakes</string>
+    <string name="disney_live_adventures">Live-action adventures</string>
+    <string name="tmdb_same_saga">In the same saga</string>
+    <string name="tmdb_by_director">Directed by %1$s</string>
+    <string name="search_discover">To discover</string>
+    <string name="catalog_settings">Catalog</string>
+    <string name="catalog_min_year">Oldest titles suggested</string>
+    <string name="catalog_popularity">How well known</string>
+    <string name="show_continue_watching_rows">Show « Continue watching »</string>
+    <string name="show_continue_watching_rows_on">On the home page and the Movies and Series pages</string>
+    <string name="show_recently_added_rows">Show « Recently added »</string>
+    <string name="show_recently_added_rows_on">On the home page and the libraries</string>
+    <string name="rows_hidden">Hidden</string>
+    <string name="catalog_all_years">Any year</string>
+    <string name="catalog_popularity_balanced">Balanced</string>
+    <string name="catalog_popularity_discovery">Discovery: lesser known titles too</string>
+    <string name="catalog_popularity_hits">Big hits only</string>
+    <string-array name="catalog_min_year_options" translatable="false">
+        <item>@string/catalog_all_years</item>
+        <item>1970</item>
+        <item>1980</item>
+        <item>1990</item>
+        <item>2000</item>
+        <item>2010</item>
+    </string-array>
+    <string-array name="catalog_popularity_options" translatable="false">
+        <item>@string/catalog_popularity_balanced</item>
+        <item>@string/catalog_popularity_discovery</item>
+        <item>@string/catalog_popularity_hits</item>
+    </string-array>
     <string name="discover_studios_sagas">Studios &amp; sagas</string>
     <string name="discover_networks">Networks</string>
     <string name="discover_studios">Studios</string>

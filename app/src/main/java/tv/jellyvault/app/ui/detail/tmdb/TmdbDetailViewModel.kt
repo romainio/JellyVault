@@ -65,9 +65,14 @@ sealed interface TmdbDetailEvent {
 data class TmdbDetailState(
     val details: DataLoadingState<TmdbDetails> = DataLoadingState.Pending,
     val status: RequestStatus? = null,
+    /** The other movies of its saga */
+    val saga: List<BaseItem> = emptyList(),
+    /** What TMDB recommends after it, kept to the same kind of title */
     val similar: List<BaseItem> = emptyList(),
-    /** TMDB "similar": same genres and keywords */
-    val sameGenre: List<BaseItem> = emptyList(),
+    /** The director's other films, else more of the same genres */
+    val more: List<BaseItem> = emptyList(),
+    /** Who [more] is about; null for the same-genre row */
+    val moreDirector: String? = null,
     val seasonDialog: SeasonDialogState? = null,
     val sending: Boolean = false,
     val event: TmdbDetailEvent? = null,
@@ -326,9 +331,15 @@ class TmdbDetailViewModel
                 backdropService.submit(backdropKey(item), details.item.detailBackdropUrl)
                 loadedDetails = details
                 startStatus(details)
-                val similar = catalogRepository.cards(details.recommendations).map { it.toBaseItem() }
-                val sameGenre = catalogRepository.cards(details.similarTitles).map { it.toBaseItem() }
-                _state.update { it.copy(similar = similar, sameGenre = sameGenre) }
+                val rows = catalogRepository.titleRows(details)
+                _state.update {
+                    it.copy(
+                        saga = rows.saga.map { card -> card.toBaseItem() },
+                        similar = rows.similar.map { card -> card.toBaseItem() },
+                        more = rows.more.map { card -> card.toBaseItem() },
+                        moreDirector = rows.director?.name,
+                    )
+                }
             }
         }
 

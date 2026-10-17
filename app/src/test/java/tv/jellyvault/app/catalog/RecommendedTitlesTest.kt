@@ -18,11 +18,16 @@ class RecommendedTitlesTest {
     private val catalog = mockk<CatalogRepository>()
     private val service = RecommendedTitles(tmdb, catalog)
 
-    private fun item(id: Int) = TmdbItem(id, TmdbMediaType.MOVIE, "T$id", null, "/p.jpg", null, "2020-01-01", 7.0, emptyList())
+    private fun item(
+        id: Int,
+        genres: List<Int> = emptyList(),
+        votes: Int = 1000,
+    ) = TmdbItem(id, TmdbMediaType.MOVIE, "T$id", null, "/p.jpg", null, "2020-01-01", 7.0, genres, voteCount = votes)
 
     private fun details(
         recommendations: List<TmdbItem>,
         similar: List<TmdbItem> = emptyList(),
+        genres: List<Int> = emptyList(),
     ) = TmdbDetails(
         item = item(1),
         runtimeMinutes = null,
@@ -35,6 +40,7 @@ class RecommendedTitlesTest {
         recommendations = recommendations,
         tvdbId = null,
         similarTitles = similar,
+        genreIds = genres,
     )
 
     @Test
@@ -48,12 +54,31 @@ class RecommendedTitlesTest {
         }
 
     @Test
-    fun falls_back_to_similar_titles_when_there_are_no_recommendations() =
+    fun never_falls_back_to_tmdb_similar_titles() =
         runTest {
             every { tmdb.isConfigured } returns true
             coEvery { tmdb.details(TmdbMediaType.MOVIE, 1) } returns details(emptyList(), listOf(item(4)))
             coEvery { catalog.cards(any()) } answers { firstArg<List<TmdbItem>>().map { MediaCard.Remote(it) } }
+            assertTrue(service.forTitle(TmdbMediaType.MOVIE, mapOf("Tmdb" to "1")).isEmpty())
+        }
+
+    @Test
+    fun live_action_titles_get_no_cartoons_nor_unknown_titles() =
+        runTest {
+            every { tmdb.isConfigured } returns true
+            val recommendations = listOf(item(2, genres = listOf(16, 10751)), item(3, votes = 12), item(4, genres = listOf(28)))
+            coEvery { tmdb.details(TmdbMediaType.MOVIE, 1) } returns details(recommendations, genres = listOf(28, 12))
+            coEvery { catalog.cards(any()) } answers { firstArg<List<TmdbItem>>().map { MediaCard.Remote(it) } }
             assertEquals(listOf("T4"), service.forTitle(TmdbMediaType.MOVIE, mapOf("Tmdb" to "1")).map { it.name })
+        }
+
+    @Test
+    fun cartoons_keep_cartoon_recommendations() =
+        runTest {
+            every { tmdb.isConfigured } returns true
+            coEvery { tmdb.details(TmdbMediaType.MOVIE, 1) } returns details(listOf(item(2, genres = listOf(16))), genres = listOf(16))
+            coEvery { catalog.cards(any()) } answers { firstArg<List<TmdbItem>>().map { MediaCard.Remote(it) } }
+            assertEquals(listOf("T2"), service.forTitle(TmdbMediaType.MOVIE, mapOf("Tmdb" to "1")).map { it.name })
         }
 
     @Test

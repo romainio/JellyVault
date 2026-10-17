@@ -29,6 +29,7 @@ import org.jellyfin.sdk.model.api.BaseItemKind
 import org.jellyfin.sdk.model.api.request.GetItemsRequest
 import timber.log.Timber
 import tv.jellyvault.app.R
+import tv.jellyvault.app.catalog.HiddenRows
 import tv.jellyvault.app.data.ServerRepository
 import tv.jellyvault.app.data.model.BaseItem
 import tv.jellyvault.app.data.model.HomeRowViewOptions
@@ -83,9 +84,18 @@ class RecommendedViewModel
         val serverReportService: ServerReportService,
         @Assisted private val parentId: UUID,
         @Assisted private val suggestionsType: BaseItemKind,
-        @Assisted private val recommendedRows: List<RecommendedRow<*>>,
+        @Assisted allRecommendedRows: List<RecommendedRow<*>>,
         @Assisted private val viewOptions: HomeRowViewOptions,
     ) : ViewModel() {
+        /** Without the rows hidden in Settings › Advanced › Catalog */
+        private val recommendedRows =
+            HiddenRows.current.let { hidden ->
+                allRecommendedRows.filterNot {
+                    (hidden.continueWatching && it.title == R.string.continue_watching) ||
+                        (hidden.recentlyAdded && it.title == R.string.recently_added)
+                }
+            }
+
         @AssistedFactory
         interface Factory {
             fun create(

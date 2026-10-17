@@ -22,6 +22,7 @@ import tv.jellyvault.app.catalog.CatalogStudio
 import tv.jellyvault.app.catalog.MediaCard
 import tv.jellyvault.app.catalog.tmdb.TmdbItem
 import tv.jellyvault.app.catalog.tmdb.TmdbMediaType
+import tv.jellyvault.app.ui.util.StringStringProvider
 import tv.jellyvault.app.util.HomeRowLoadingState
 import tv.jellyvault.app.util.JvDispatchers
 import tv.jellyvault.app.util.configure
@@ -39,9 +40,11 @@ class TmdbBrowseViewModelTest {
     fun setUp() {
         Dispatchers.setMain(dispatcher)
         JvDispatchers.configure(dispatcher)
-        coEvery { catalog.queryRow(any()) } returns listOf(card(1))
+        coEvery { catalog.queryRow(any(), any()) } returns listOf(card(1))
         coEvery { catalog.queryPage(any(), any()) } returns (listOf(card(2)) to 1)
         coEvery { catalog.sagaRow(any()) } returns listOf(card(3), card(4))
+        coEvery { catalog.collectionRow(any()) } returns listOf(card(5))
+        coEvery { catalog.collectionName(any()) } returns "Toy Story - Saga"
     }
 
     @After
@@ -73,7 +76,7 @@ class TmdbBrowseViewModelTest {
 
     @Test
     fun empty_rows_are_hidden() {
-        coEvery { catalog.queryRow(any()) } returns emptyList()
+        coEvery { catalog.queryRow(any(), any()) } returns emptyList()
         val vm = vm()
         vm.init(BrowseTarget.Studio(CatalogStudio.PIXAR))
         val first = vm.rows.value.first() as HomeRowLoadingState.Success
@@ -94,7 +97,18 @@ class TmdbBrowseViewModelTest {
         val target = BrowseTarget.Studio(CatalogStudio.PIXAR)
         vm.init(target)
         vm.init(target)
-        coVerify(exactly = 5) { catalog.queryRow(any()) }
+        // Popular, new, top rated, classics, then the first saga
+        coVerify(exactly = 4) { catalog.queryRow(any(), any()) }
+        coVerify(exactly = 1) { catalog.collectionRow(10194) }
         assertNotNull(vm.grid.value)
+    }
+
+    @Test
+    fun studio_saga_rows_take_the_tmdb_collection_name() {
+        val vm = vm()
+        vm.init(BrowseTarget.Studio(CatalogStudio.PIXAR))
+        val saga = vm.rows.value[4] as HomeRowLoadingState.Success
+        assertEquals(StringStringProvider("Toy Story"), saga.title)
+        assertEquals(1, saga.items.size)
     }
 }

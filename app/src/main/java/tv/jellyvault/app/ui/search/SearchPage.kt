@@ -90,6 +90,7 @@ fun SearchPage(
     val keyboardController = LocalSoftwareKeyboardController.current
     val state by viewModel.state.collectAsState()
     val unifiedResults by viewModel.unifiedResults.collectAsState()
+    val mosaic by viewModel.mosaic.collectAsState()
     val programDialogState by viewModel.programDialogState.collectAsState()
 
     // Start with current preferences, but collect updates when view options change
@@ -277,6 +278,7 @@ fun SearchPage(
             // One grid of movies and series, from the server and from TMDB (✓ on owned titles)
             SearchCombinedResults(
                 result = unifiedResults,
+                mosaic = mosaic,
                 focusRequester = focusRequesters[COMBINED_ROW],
                 onClickItem = onClickItem,
                 onLongClickItem = { index, item ->
@@ -360,9 +362,35 @@ fun SearchCombinedResults(
     onClickPosition: (RowColumn) -> Unit,
     positionCallback: (columns: Int, position: Int) -> Unit,
     modifier: Modifier = Modifier,
+    mosaic: List<BaseItem> = emptyList(),
 ) {
+    val gridCard: @Composable (GridItemDetails<BaseItem>) -> Unit = { details ->
+        GridCard(
+            item = details.item,
+            onClick = details.onClick,
+            onLongClick = details.onLongClick,
+            modifier = details.mod,
+            fillWidth = details.widthPx,
+        )
+    }
     when (result) {
-        SearchResult.NoQuery -> {}
+        // Nothing typed yet: a mosaic of what is trending, to browse or for ideas
+        SearchResult.NoQuery -> {
+            if (mosaic.isNotEmpty()) {
+                SearchGrid(
+                    title = stringResource(R.string.search_discover),
+                    items = mosaic,
+                    focusRequester = focusRequester,
+                    onClickItem = onClickItem,
+                    onLongClickItem = onLongClickItem,
+                    onPlayItem = onPlayItem,
+                    onClickPosition = onClickPosition,
+                    positionCallback = positionCallback,
+                    cardContent = gridCard,
+                    modifier = modifier,
+                )
+            }
+        }
 
         SearchResult.Searching -> {
             SearchResultPlaceholder(
@@ -390,6 +418,7 @@ fun SearchCombinedResults(
                 )
             } else {
                 SearchGrid(
+                    title = stringResource(R.string.results),
                     items = result.items,
                     focusRequester = focusRequester,
                     onClickItem = onClickItem,
@@ -397,15 +426,7 @@ fun SearchCombinedResults(
                     onPlayItem = onPlayItem,
                     onClickPosition = onClickPosition,
                     positionCallback = positionCallback,
-                    cardContent = { details ->
-                        GridCard(
-                            item = details.item,
-                            onClick = details.onClick,
-                            onLongClick = details.onLongClick,
-                            modifier = details.mod,
-                            fillWidth = details.widthPx,
-                        )
-                    },
+                    cardContent = gridCard,
                     modifier = modifier,
                 )
             }
@@ -415,6 +436,7 @@ fun SearchCombinedResults(
 
 @Composable
 private fun <T : CardGridItem> SearchGrid(
+    title: String,
     items: List<T?>,
     focusRequester: FocusRequester,
     onClickItem: (Int, T) -> Unit,
@@ -429,7 +451,7 @@ private fun <T : CardGridItem> SearchGrid(
         verticalArrangement = Arrangement.spacedBy(0.dp),
         modifier = modifier,
     ) {
-        ItemRowTitle(stringResource(R.string.results))
+        ItemRowTitle(title)
 
         CardGrid(
             pager = items,

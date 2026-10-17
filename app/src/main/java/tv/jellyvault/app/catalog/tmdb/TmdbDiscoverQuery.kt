@@ -8,6 +8,9 @@ enum class TmdbSort(
     POPULARITY("popularity.desc"),
     RATING("vote_average.desc"),
     REVENUE("revenue.desc"),
+
+    /** Oldest first, e.g. a studio's films in the order they came out */
+    RELEASE_ASC("primary_release_date.asc"),
 }
 
 /**
@@ -42,6 +45,14 @@ data class TmdbDiscoverQuery(
     val anyGenreIds: List<Int> = emptyList(),
     /** TMDB series type, e.g. 2 for mini-series */
     val tvType: Int? = null,
+    /** None of these genres, e.g. no cartoons in a spy row */
+    val withoutGenreIds: List<Int> = emptyList(),
+    /** None of these TMDB keywords */
+    val withoutKeywordIds: List<Int> = emptyList(),
+    /** ISO 639-1 original languages, any of them ("or"), e.g. French and English titles only */
+    val originalLanguages: List<String> = emptyList(),
+    /** TMDB person in the crew, e.g. the director (movies only) */
+    val crewId: Int? = null,
 ) {
     fun params(page: Int): Map<String, String> =
         buildMap {
@@ -49,11 +60,15 @@ data class TmdbDiscoverQuery(
                 ?: anyGenreIds.takeIf { it.isNotEmpty() }?.let { put("with_genres", it.joinToString("|")) }
             tvType?.let { put("with_type", it.toString()) }
             keywordIds.takeIf { it.isNotEmpty() }?.let { put("with_keywords", it.joinToString("|")) }
+            withoutGenreIds.takeIf { it.isNotEmpty() }?.let { put("without_genres", it.joinToString(",")) }
+            withoutKeywordIds.takeIf { it.isNotEmpty() }?.let { put("without_keywords", it.joinToString(",")) }
+            originalLanguages.takeIf { it.isNotEmpty() }?.let { put("with_original_language", it.joinToString("|")) }
+            crewId?.let { put("with_crew", it.toString()) }
             originCountry?.let { put("with_origin_country", it) }
             (companyId?.toString() ?: companyIds.takeIf { it.isNotEmpty() }?.joinToString("|"))?.let { put("with_companies", it) }
             (networkId?.toString() ?: networkIds.takeIf { it.isNotEmpty() }?.joinToString("|"))?.let { put("with_networks", it) }
             airedAfter?.let { put("air_date.gte", it.toString()) }
-            put("sort_by", sort.param)
+            put("sort_by", if (sort == TmdbSort.RELEASE_ASC && mediaType == TmdbMediaType.TV) "first_air_date.asc" else sort.param)
             put("vote_count.gte", minVotes.toString())
             maxVotes?.let { put("vote_count.lte", it.toString()) }
             minRating?.let { put("vote_average.gte", it.toString()) }

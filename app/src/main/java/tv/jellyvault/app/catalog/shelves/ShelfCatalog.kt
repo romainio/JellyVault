@@ -72,6 +72,10 @@ private object K {
     const val PSYCHOLOGICAL_THRILLER = 12565
 }
 
+/** Live-action styles: keyword and genre matches would bring cartoons (Cars 2 is a spy film, Zootopia a crime one) */
+private val ADULT = listOf(G.ANIMATION, G.FAMILY)
+private val NO_ANIMATION = listOf(G.ANIMATION)
+
 private const val MOVIE_VOTES = 300
 private const val TV_VOTES = 100
 private const val TV_MINISERIES = 2
@@ -87,6 +91,7 @@ private fun movie(
     minRating: Double? = null,
     after: LocalDate? = null,
     before: LocalDate? = null,
+    without: List<Int> = emptyList(),
 ) = TmdbDiscoverQuery(
     TmdbMediaType.MOVIE,
     genreId = genreId,
@@ -100,6 +105,7 @@ private fun movie(
     releasedAfter = after,
     releasedBefore = before,
     mainstreamOnly = true,
+    withoutGenreIds = without,
 )
 
 private fun tv(
@@ -111,6 +117,7 @@ private fun tv(
     minRating: Double? = null,
     tvType: Int? = null,
     after: LocalDate? = null,
+    without: List<Int> = emptyList(),
 ) = TmdbDiscoverQuery(
     TmdbMediaType.TV,
     genreId = genreId,
@@ -122,6 +129,7 @@ private fun tv(
     tvType = tvType,
     releasedAfter = after,
     mainstreamOnly = true,
+    withoutGenreIds = without,
 )
 
 object ShelfCatalog {
@@ -137,37 +145,41 @@ object ShelfCatalog {
                 M,
                 ShelfGroup.FRENCH,
                 listOf(G.COMEDY),
-            ) { movie(G.COMEDY, country = "FR") },
-            Shelf("romance", R.string.shelf_romance, M, ShelfGroup.ROMANCE, listOf(G.ROMANCE)) { movie(G.ROMANCE) },
+            ) { movie(G.COMEDY, country = "FR", without = NO_ANIMATION) },
+            Shelf("romance", R.string.shelf_romance, M, ShelfGroup.ROMANCE, listOf(G.ROMANCE)) { movie(G.ROMANCE, without = NO_ANIMATION) },
             Shelf("emotion", R.string.shelf_emotion, M, ShelfGroup.DRAMA, listOf(G.DRAMA, G.ROMANCE)) {
-                movie(G.DRAMA, andGenres = listOf(G.ROMANCE), minRating = 7.0)
+                movie(G.DRAMA, andGenres = listOf(G.ROMANCE), minRating = 7.0, without = ADULT)
             },
             Shelf("scifi_fantasy", R.string.shelf_scifi_fantasy, M, ShelfGroup.SCIFI, listOf(G.SCIENCE_FICTION, G.FANTASY)) {
-                movie(anyGenres = listOf(G.SCIENCE_FICTION, G.FANTASY))
+                movie(anyGenres = listOf(G.SCIENCE_FICTION, G.FANTASY), without = NO_ANIMATION)
             },
-            Shelf("crime", R.string.shelf_crime, M, ShelfGroup.CRIME, listOf(G.CRIME)) { movie(G.CRIME) },
-            Shelf("heists", R.string.theme_heist, M, ShelfGroup.CRIME, listOf(G.CRIME, G.THRILLER)) { movie(keywords = listOf(K.HEIST)) },
+            Shelf("crime", R.string.shelf_crime, M, ShelfGroup.CRIME, listOf(G.CRIME)) { movie(G.CRIME, without = ADULT) },
+            Shelf("heists", R.string.theme_heist, M, ShelfGroup.CRIME, listOf(G.CRIME, G.THRILLER)) {
+                movie(keywords = listOf(K.HEIST), without = ADULT)
+            },
             Shelf("true_story", R.string.theme_true_story, M, ShelfGroup.TRUE_STORY, listOf(G.DRAMA, G.HISTORY)) {
-                movie(keywords = listOf(K.TRUE_STORY))
+                movie(keywords = listOf(K.TRUE_STORY), without = ADULT)
             },
             Shelf("blockbusters", R.string.shelf_blockbusters, M, ShelfGroup.ACTION, listOf(G.ACTION, G.ADVENTURE, G.SCIENCE_FICTION)) {
                 movie(country = "US", sort = TmdbSort.REVENUE, minVotes = 2000, after = it.minusYears(15))
             },
             Shelf("action_adventure", R.string.shelf_action_adventure, M, ShelfGroup.ACTION, listOf(G.ACTION, G.ADVENTURE)) {
-                movie(G.ACTION, andGenres = listOf(G.ADVENTURE))
+                movie(G.ACTION, andGenres = listOf(G.ADVENTURE), without = NO_ANIMATION)
             },
             Shelf("action_thrillers", R.string.shelf_action_thrillers, M, ShelfGroup.THRILLER, listOf(G.ACTION, G.THRILLER)) {
-                movie(G.ACTION, andGenres = listOf(G.THRILLER))
+                movie(G.ACTION, andGenres = listOf(G.THRILLER), without = ADULT)
             },
             Shelf("adventure", R.string.shelf_adventure, M, ShelfGroup.ACTION, listOf(G.ADVENTURE)) { movie(G.ADVENTURE) },
             Shelf("superheroes", R.string.theme_superhero, M, ShelfGroup.ACTION, listOf(G.ACTION, G.SCIENCE_FICTION)) {
-                movie(keywords = listOf(K.SUPERHERO))
+                movie(keywords = listOf(K.SUPERHERO), without = listOf(G.FAMILY))
             },
-            Shelf("spies", R.string.theme_spy, M, ShelfGroup.THRILLER, listOf(G.ACTION, G.THRILLER)) { movie(keywords = listOf(K.SPY)) },
+            Shelf("spies", R.string.theme_spy, M, ShelfGroup.THRILLER, listOf(G.ACTION, G.THRILLER)) {
+                movie(anyGenres = listOf(G.ACTION, G.THRILLER), keywords = listOf(K.SPY), without = ADULT)
+            },
             Shelf("psychological", R.string.theme_psychological, M, ShelfGroup.THRILLER, listOf(G.THRILLER, G.MYSTERY)) {
-                movie(keywords = listOf(K.PSYCHOLOGICAL_THRILLER))
+                movie(keywords = listOf(K.PSYCHOLOGICAL_THRILLER), without = ADULT)
             },
-            Shelf("comedies", R.string.shelf_comedies, M, ShelfGroup.COMEDY, listOf(G.COMEDY)) { movie(G.COMEDY) },
+            Shelf("comedies", R.string.shelf_comedies, M, ShelfGroup.COMEDY, listOf(G.COMEDY)) { movie(G.COMEDY, without = NO_ANIMATION) },
             Shelf("recent_gems", R.string.shelf_recent_gems, M, ShelfGroup.PRESTIGE, emptyList()) {
                 movie(minRating = 7.0, after = it.minusYears(2))
             },
@@ -178,11 +190,13 @@ object ShelfCatalog {
                 movie(minVotes = 3000, after = LocalDate.of(1990, 1, 1), before = LocalDate.of(2009, 12, 31))
             },
             Shelf("animation", R.string.shelf_animation, M, ShelfGroup.FAMILY, listOf(G.ANIMATION, G.FAMILY)) { movie(G.ANIMATION) },
-            Shelf("horror", R.string.shelf_horror, M, ShelfGroup.HORROR, listOf(G.HORROR), baseWeight = 0.7) { movie(G.HORROR) },
+            Shelf("horror", R.string.shelf_horror, M, ShelfGroup.HORROR, listOf(G.HORROR), baseWeight = 0.7) {
+                movie(G.HORROR, without = NO_ANIMATION)
+            },
             Shelf("documentaries", R.string.shelf_documentaries, M, ShelfGroup.DOCUMENTARY, listOf(G.DOCUMENTARY), baseWeight = 0.6) {
                 movie(G.DOCUMENTARY, minVotes = 150)
             },
-            Shelf("tv_crime", R.string.shelf_tv_crime, T, ShelfGroup.CRIME, listOf(G.CRIME)) { tv(G.CRIME) },
+            Shelf("tv_crime", R.string.shelf_tv_crime, T, ShelfGroup.CRIME, listOf(G.CRIME)) { tv(G.CRIME, without = NO_ANIMATION) },
             Shelf("tv_french", R.string.theme_french_series, T, ShelfGroup.FRENCH, emptyList()) { tv(country = "FR") },
             Shelf("tv_comedy", R.string.shelf_tv_comedy, T, ShelfGroup.COMEDY, listOf(G.COMEDY)) { tv(G.COMEDY) },
             Shelf("tv_miniseries", R.string.shelf_tv_miniseries, T, ShelfGroup.DRAMA, listOf(G.DRAMA)) { tv(tvType = TV_MINISERIES) },
@@ -192,13 +206,23 @@ object ShelfCatalog {
                 T,
                 ShelfGroup.SCIFI,
                 listOf(G.SCIENCE_FICTION, G.FANTASY),
-            ) { tv(G.TV_SCIFI_FANTASY) },
+            ) { tv(G.TV_SCIFI_FANTASY, without = NO_ANIMATION) },
             Shelf("tv_true_story", R.string.shelf_tv_true_story, T, ShelfGroup.TRUE_STORY, listOf(G.DRAMA, G.CRIME)) {
-                tv(keywords = listOf(K.TRUE_STORY))
+                tv(keywords = listOf(K.TRUE_STORY), without = NO_ANIMATION)
             },
-            Shelf("tv_drama", R.string.shelf_tv_drama, T, ShelfGroup.DRAMA, listOf(G.DRAMA)) { tv(G.DRAMA, minVotes = 300) },
-            Shelf("tv_mystery", R.string.shelf_tv_mystery, T, ShelfGroup.THRILLER, listOf(G.MYSTERY, G.THRILLER)) { tv(G.MYSTERY) },
-            Shelf("tv_action", R.string.shelf_tv_action, T, ShelfGroup.ACTION, listOf(G.ACTION, G.ADVENTURE)) { tv(G.TV_ACTION_ADVENTURE) },
+            Shelf(
+                "tv_drama",
+                R.string.shelf_tv_drama,
+                T,
+                ShelfGroup.DRAMA,
+                listOf(G.DRAMA),
+            ) { tv(G.DRAMA, minVotes = 300, without = NO_ANIMATION) },
+            Shelf("tv_mystery", R.string.shelf_tv_mystery, T, ShelfGroup.THRILLER, listOf(G.MYSTERY, G.THRILLER)) {
+                tv(G.MYSTERY, without = NO_ANIMATION)
+            },
+            Shelf("tv_action", R.string.shelf_tv_action, T, ShelfGroup.ACTION, listOf(G.ACTION, G.ADVENTURE)) {
+                tv(G.TV_ACTION_ADVENTURE, without = NO_ANIMATION)
+            },
             Shelf("tv_animation", R.string.shelf_tv_animation, T, ShelfGroup.FAMILY, listOf(G.ANIMATION)) { tv(G.ANIMATION) },
             Shelf("tv_documentaries", R.string.shelf_tv_documentaries, T, ShelfGroup.DOCUMENTARY, listOf(G.DOCUMENTARY), baseWeight = 0.6) {
                 tv(G.DOCUMENTARY)

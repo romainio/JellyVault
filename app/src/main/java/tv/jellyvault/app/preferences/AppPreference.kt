@@ -1064,6 +1064,49 @@ sealed interface AppPreference<Pref, T> {
                 summaryOff = R.string.shelf_home_off,
             )
 
+        val CatalogMinYear =
+            AppChoicePreference<AppPreferences, Int>(
+                title = R.string.catalog_min_year,
+                defaultValue = 0,
+                getter = { it.interfacePreferences.catalogPreferences.minYear },
+                setter = { prefs, value -> prefs.updateCatalogPreferences { minYear = value } },
+                displayValues = R.array.catalog_min_year_options,
+                indexToValue = { CATALOG_MIN_YEARS.getOrElse(it) { 0 } },
+                // A year saved by an older or newer version: the closest choice at or before it
+                valueToIndex = { year -> CATALOG_MIN_YEARS.indexOfLast { it <= year }.coerceAtLeast(0) },
+            )
+
+        val CatalogPopularityPref =
+            AppChoicePreference<AppPreferences, CatalogPopularity>(
+                title = R.string.catalog_popularity,
+                defaultValue = CatalogPopularity.POPULARITY_BALANCED,
+                getter = { it.interfacePreferences.catalogPreferences.popularity },
+                setter = { prefs, value -> prefs.updateCatalogPreferences { popularity = value } },
+                displayValues = R.array.catalog_popularity_options,
+                indexToValue = { CatalogPopularity.forNumber(it) ?: CatalogPopularity.POPULARITY_BALANCED },
+                valueToIndex = { if (it == CatalogPopularity.UNRECOGNIZED) 0 else it.number },
+            )
+
+        val ShowContinueWatchingRows =
+            AppSwitchPreference<AppPreferences>(
+                title = R.string.show_continue_watching_rows,
+                defaultValue = true,
+                getter = { !it.interfacePreferences.catalogPreferences.hideContinueWatching },
+                setter = { prefs, value -> prefs.updateCatalogPreferences { hideContinueWatching = !value } },
+                summaryOn = R.string.show_continue_watching_rows_on,
+                summaryOff = R.string.rows_hidden,
+            )
+
+        val ShowRecentlyAddedRows =
+            AppSwitchPreference<AppPreferences>(
+                title = R.string.show_recently_added_rows,
+                defaultValue = true,
+                getter = { !it.interfacePreferences.catalogPreferences.hideRecentlyAdded },
+                setter = { prefs, value -> prefs.updateCatalogPreferences { hideRecentlyAdded = !value } },
+                summaryOn = R.string.show_recently_added_rows_on,
+                summaryOff = R.string.rows_hidden,
+            )
+
         val RateFromTv =
             AppSwitchPreference<AppPreferences>(
                 title = R.string.rate_from_tv,
@@ -1255,8 +1298,23 @@ val SkipSegmentPreferences =
         ),
     )
 
+/** Choices of Settings › Advanced › Catalog › Oldest titles suggested, 0 for any year */
+private val CATALOG_MIN_YEARS = listOf(0, 1970, 1980, 1990, 2000, 2010)
+
 val advancedPreferences =
     buildList {
+        add(
+            PreferenceGroup(
+                title = R.string.catalog_settings,
+                preferences =
+                    listOf(
+                        AppPreference.CatalogMinYear,
+                        AppPreference.CatalogPopularityPref,
+                        AppPreference.ShowContinueWatchingRows,
+                        AppPreference.ShowRecentlyAddedRows,
+                    ),
+            ),
+        )
         add(
             PreferenceGroup(
                 title = R.string.ui_interface,
