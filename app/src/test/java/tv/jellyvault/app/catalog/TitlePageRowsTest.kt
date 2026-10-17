@@ -61,7 +61,7 @@ class TitlePageRowsTest {
         runTest {
             coEvery { tmdb.collection(10) } returns TmdbCollection("Saga", null, listOf(item(1), item(2), item(3)))
             val director = TmdbNamed(525, "Christopher Nolan")
-            coEvery { tmdb.discover(directorQuery(director), 1) } returns page(item(1), item(3), item(4), item(5), item(6), item(8))
+            coEvery { tmdb.directedMovies(525) } returns listOf(item(1), item(3), item(4), item(5), item(6), item(8))
             val rows =
                 repo.titleRows(
                     details(recommendations = listOf(item(2), item(4), item(7)), collection = TmdbNamed(10, "Saga"), director = director),
@@ -84,7 +84,7 @@ class TitlePageRowsTest {
     fun a_director_with_few_other_films_gives_way_to_the_same_genres() =
         runTest {
             val director = TmdbNamed(9, "Debut")
-            coEvery { tmdb.discover(directorQuery(director), 1) } returns page(item(8))
+            coEvery { tmdb.directedMovies(9) } returns listOf(item(8), item(9, votes = 10))
             val genreQuery = sameGenreQuery(details())!!
             coEvery { tmdb.discover(genreQuery, 1) } returns page(item(1), item(11), item(12))
             val rows = repo.titleRows(details(director = director))
@@ -109,6 +109,7 @@ class TitlePageRowsTest {
         runTest {
             coEvery { tmdb.collection(10) } throws TmdbException("down")
             coEvery { tmdb.discover(any<TmdbDiscoverQuery>(), any()) } throws TmdbException("down")
+            coEvery { tmdb.directedMovies(any()) } throws TmdbException("down")
             val rows = repo.titleRows(details(listOf(item(4)), collection = TmdbNamed(10, "Saga"), director = TmdbNamed(1, "x")))
             assertTrue(rows.saga.isEmpty() && rows.more.isEmpty())
             assertEquals(listOf(4), rows.similar.ids())
@@ -120,5 +121,17 @@ class TitlePageRowsTest {
         assertEquals("The Avengers", collectionRowName("The Avengers Collection"))
         assertEquals("Los Vengadores", collectionRowName("Los Vengadores - Colección"))
         assertEquals("Saga", collectionRowName("Saga"))
+    }
+
+    @Test
+    fun saga_key_groups_the_films_of_a_saga() {
+        assertEquals("gabriel's inferno", sagaKey("Gabriel's Inferno"))
+        assertEquals("gabriel's inferno", sagaKey("Gabriel's Inferno: Part II"))
+        assertEquals("gabriel's inferno", sagaKey("Gabriel's Inferno - Part III"))
+        assertEquals("rocky", sagaKey("Rocky IV"))
+        assertEquals("toy story", sagaKey("Toy Story 2"))
+        assertEquals("spider-man", sagaKey("Spider-Man 3"))
+        assertEquals("x-men", sagaKey("X-Men"))
+        assertEquals("billy elliot", sagaKey("Billy Elliot"))
     }
 }

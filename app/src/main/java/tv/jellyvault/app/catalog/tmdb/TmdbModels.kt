@@ -35,8 +35,11 @@ data class TmdbItem(
     /** Cards are about 230 px wide and grow on focus: w342 looked soft once scaled */
     val posterUrl: String get() = "$IMAGE_BASE_URL/w500$posterPath"
 
-    /** The home and browse headers draw it full-screen: w780 looked soft on a 1080p TV */
-    val backdropUrl: String? get() = backdropPath?.let { "$IMAGE_BASE_URL/w1280$it" }
+    /**
+     * The home and browse headers draw it full-width on a 1080p screen: w780 and w1280 came out stretched and soft.
+     * TMDB has no size between w1280 and the original (1920 px or more, scaled down to the screen when decoded).
+     */
+    val backdropUrl: String? get() = backdropPath?.let { "$IMAGE_BASE_URL/original$it" }
 
     /** Full-screen backdrop of the title page */
     val detailBackdropUrl: String? get() = backdropUrl
@@ -56,6 +59,12 @@ internal data class TmdbPage(
     val results: List<TmdbRawItem> = emptyList(),
     val page: Int = 1,
     @SerialName("total_pages") val totalPages: Int = 1,
+)
+
+/** A person's movie credits: only the crew is read */
+@Serializable
+internal data class TmdbRawPersonCredits(
+    val crew: List<TmdbRawItem> = emptyList(),
 )
 
 enum class TmdbListType {
@@ -94,6 +103,8 @@ internal data class TmdbRawItem(
     @SerialName("original_language") val originalLanguage: String? = null,
     @SerialName("vote_count") val voteCount: Int = 0,
     val popularity: Double = 0.0,
+    /** The person's job on this title, in a person's crew credits ("Director") */
+    val job: String? = null,
 ) {
     /**
      * @param requestedType the type that was queried, used when the response has no media_type (discover endpoints)

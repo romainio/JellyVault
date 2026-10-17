@@ -69,6 +69,15 @@ class TmdbClientTest {
     ) = TmdbClient(OkHttpClient.Builder().addInterceptor(fake).build()) { token }.also { it.language = { FRENCH } }
 
     @Test
+    fun directed_movies_keep_only_directing_credits_most_popular_first() =
+        runTest(testDispatcher) {
+            val fake = FakeTmdb(mapOf("/3/person/525/movie_credits" to (200 to fixture("person_movie_credits.json"))))
+            val movies = client(fake).directedMovies(525)
+            assertEquals(listOf("Interstellar", "Inception"), movies.map { it.title })
+            assertEquals(TmdbMediaType.MOVIE, movies.first().mediaType)
+        }
+
+    @Test
     fun trending_movies_parses_and_sends_auth_and_locale() =
         runTest(testDispatcher) {
             val fake = FakeTmdb(mapOf("/3/trending/movie/week" to (200 to fixture("trending_movie_week.json"))))
@@ -80,7 +89,7 @@ class TmdbClientTest {
             assertEquals(TmdbMediaType.MOVIE, first.mediaType)
             assertEquals(2024, first.year)
             assertEquals("https://image.tmdb.org/t/p/w500/poster1.jpg", first.posterUrl)
-            assertEquals("https://image.tmdb.org/t/p/w1280/backdrop1.jpg", first.backdropUrl)
+            assertEquals("https://image.tmdb.org/t/p/original/backdrop1.jpg", first.backdropUrl)
             assertNull(items[1].backdropUrl)
 
             val request = fake.requests.single()

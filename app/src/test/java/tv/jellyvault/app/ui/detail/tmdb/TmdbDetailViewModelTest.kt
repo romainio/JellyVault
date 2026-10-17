@@ -111,7 +111,7 @@ class TmdbDetailViewModelTest {
             val vm = viewModel(TmdbMediaType.MOVIE, RequestStatus.NotRequested)
             assertTrue(vm.state.value.details is DataLoadingState.Success)
             assertEquals(RequestStatus.NotRequested, vm.state.value.status)
-            coVerify { backdrop.submit("tmdb_movie_10", "https://image.tmdb.org/t/p/w1280/b.jpg") }
+            coVerify { backdrop.submit("tmdb_movie_10", "https://image.tmdb.org/t/p/original/b.jpg") }
         }
 
     @Test

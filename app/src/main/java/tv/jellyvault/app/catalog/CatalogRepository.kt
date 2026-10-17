@@ -165,8 +165,12 @@ class CatalogRepository
         suspend fun queryRow(
             query: TmdbDiscoverQuery,
             exclude: List<TmdbDiscoverQuery>,
+            pages: Int = 1,
+            onePerSaga: Boolean = false,
         ): List<MediaCard> {
-            val items = tmdb.discover(query).items.forQuery(query)
+            val first = tmdb.discover(query)
+            val more = (2..minOf(pages, first.totalPages)).flatMap { page -> secondPage { tmdb.discover(query, page).items } }
+            val items = (first.items + more).forQuery(query).let { if (onePerSaga) it.distinctBy { item -> sagaKey(item.title) } else it }
             if (exclude.isEmpty()) return toCards(items)
             // Same requests as the rows above: answered from the TMDB cache
             val shown = exclude.flatMap { tmdb.discover(it).items.forQuery(it) }.map { it.key }.toSet()
@@ -189,7 +193,7 @@ class CatalogRepository
             val shown = (saga + similar).map { it.key }.toSet() + self
             val byDirector =
                 details.director
-                    ?.let { director -> orEmpty("Director row") { tmdb.discover(directorQuery(director)).items } }
+                    ?.let { director -> orEmpty("Director row") { tmdb.directedMovies(director.id).knownFilms() } }
                     .orEmpty()
                     .filter { it.key !in shown }
             val (more, director) =
@@ -317,6 +321,24 @@ class CatalogRepository
             }
         }
     }
+
+private val SAGA_SUFFIX =
+    Regex(
+        """(\s*:.*$)|(\s+[–-]\s+.*$)|(\s+(part|partie|chapter|chapitre|vol\.?|volume)\s+\S+$)|(\s+(\d+|[ivx]+)$)""",
+        RegexOption.IGNORE_CASE,
+    )
+
+/**
+ * What a title has in common with the other films of its saga: "Gabriel's Inferno: Part II" → "gabriel's inferno"
+ */
+internal fun sagaKey(title: String): String {
+    var key = title.trim()
+    while (true) {
+        val shorter = key.replace(SAGA_SUFFIX, "").trim()
+        if (shorter == key || shorter.isEmpty()) return key.lowercase()
+        key = shorter
+    }
+}
 
 /** A row that only repeats the rows above it, but for a few titles, is not shown */
 internal const val MIN_DISTINCT_TITLES = 8

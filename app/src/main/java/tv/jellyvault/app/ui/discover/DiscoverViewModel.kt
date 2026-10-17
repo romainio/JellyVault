@@ -14,6 +14,7 @@ import kotlinx.coroutines.sync.withPermit
 import org.jellyfin.sdk.model.api.BaseItemKind
 import timber.log.Timber
 import tv.jellyvault.app.R
+import tv.jellyvault.app.catalog.CatalogFilter
 import tv.jellyvault.app.catalog.CatalogGenre
 import tv.jellyvault.app.catalog.CatalogMediaType
 import tv.jellyvault.app.catalog.CatalogRepository
@@ -109,9 +110,14 @@ class DiscoverViewModel
 
         private var mediaType: TmdbMediaType? = null
 
+        /** The settings the rows were built with: coming back after changing them reloads the page */
+        private var loadedWith: Pair<CatalogFilter, HiddenRows>? = null
+
         fun init(mediaType: TmdbMediaType) {
-            if (this.mediaType == mediaType) return
+            val settings = CatalogFilter.current to HiddenRows.current
+            if (this.mediaType == mediaType && loadedWith == settings) return
             this.mediaType = mediaType
+            loadedWith = settings
             load(mediaType)
         }
 

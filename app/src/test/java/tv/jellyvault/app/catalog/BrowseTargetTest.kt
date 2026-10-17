@@ -46,7 +46,9 @@ class BrowseTargetTest {
     @Test
     fun gems_are_settled_well_known_french_or_english_live_action_films() {
         val gems = queries(BrowseTarget.Genre(CatalogGenre.DRAMA, TmdbMediaType.MOVIE))[3]
-        assertEquals(TmdbSort.RATING, gems.sort)
+        // Best known first: sorting by rating put niche titles with inflated ratings first
+        assertEquals(TmdbSort.VOTES, gems.sort)
+        assertEquals(LocalDate.of(1990, 1, 1), gems.releasedAfter)
         assertEquals(7.2, gems.minRating)
         assertEquals(1200, gems.minVotes)
         assertEquals(6000, gems.maxVotes)
@@ -65,6 +67,7 @@ class BrowseTargetTest {
         assertTrue(popular.exclude.isEmpty())
         assertEquals(listOf(popular.query), top.exclude)
         assertEquals(listOf(popular.query, top.query), gems.exclude)
+        assertTrue(gems.onePerSaga && !top.onePerSaga)
     }
 
     @Test
@@ -100,7 +103,12 @@ class BrowseTargetTest {
         assertEquals(TmdbSort.POPULARITY, (kinds.first() as BrowseRowKind.Query).query.sort)
         assertEquals(BrowseRowKind.CollectionParts(86311), kinds[1])
         assertEquals(9, kinds.count { it is BrowseRowKind.CollectionParts })
-        assertEquals(TmdbSort.RELEASE_ASC, (kinds.last() as BrowseRowKind.Query).query.sort)
+        val releaseOrder = kinds.last() as BrowseRowKind.Query
+        assertEquals(TmdbSort.RELEASE_ASC, releaseOrder.query.sort)
+        // Every MCU film, not the first 20; no cartoons or shorts
+        assertEquals(3, releaseOrder.pages)
+        assertEquals(LocalDate.of(2008, 1, 1), releaseOrder.query.releasedAfter)
+        assertEquals(listOf(16), releaseOrder.query.withoutGenreIds)
     }
 
     @Test

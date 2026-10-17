@@ -5,7 +5,10 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
@@ -14,6 +17,7 @@ import timber.log.Timber
 import tv.jellyvault.app.catalog.BrowseRowKind
 import tv.jellyvault.app.catalog.BrowseRowSpec
 import tv.jellyvault.app.catalog.BrowseTarget
+import tv.jellyvault.app.catalog.CatalogFilter
 import tv.jellyvault.app.catalog.CatalogRepository
 import tv.jellyvault.app.catalog.browseRows
 import tv.jellyvault.app.catalog.collectionRowName
@@ -39,8 +43,15 @@ class TmdbBrowseViewModel
         val navigationManager: NavigationManager,
         private val backdropService: BackdropService,
     ) : ViewModel() {
+        /** One state per row spec, empty rows included */
         private val _rows = MutableStateFlow<List<HomeRowLoadingState>>(emptyList())
-        val rows: StateFlow<List<HomeRowLoadingState>> = _rows
+
+        /**
+         * The rows on screen: a row that loaded empty (a studio's "top rated" that only repeated its popular titles) is left
+         * out, as a zero-height row in the list stopped the remote from moving down past it
+         */
+        val rows: StateFlow<List<HomeRowLoadingState>> =
+            _rows.map { states -> states.filterNot { it.isEmptyRow() } }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
         private val _grid = MutableStateFlow<TmdbGridPager?>(null)
 
@@ -55,9 +66,19 @@ class TmdbBrowseViewModel
         private val semaphore = Semaphore(DiscoverViewModel.MAX_CONCURRENT_ROWS)
         private var lastVisible = 0
 
+        /** Bumped on every reload so rows loaded with the previous settings are never written into the new list */
+        private var generation = 0
+
+        /** The catalog limits the rows were loaded with: coming back after changing them reloads the page */
+        private var loadedWith: CatalogFilter? = null
+
         fun init(target: BrowseTarget) {
-            if (this.target == target) return
+            if (this.target == target && loadedWith == CatalogFilter.current) return
             this.target = target
+            loadedWith = CatalogFilter.current
+            generation++
+            loader.reset()
+            lastVisible = 0
             specs = browseRows(target, today())
             _rows.value = specs.map { HomeRowLoadingState.Pending(it.title) }
             _grid.value =
@@ -71,7 +92,9 @@ class TmdbBrowseViewModel
          * The page shows rows up to [index]: load the ones coming next
          */
         fun onVisibleRow(index: Int) {
-            lastVisible = maxOf(lastVisible, index)
+            // [index] counts the rows on screen: find its spec, past the empty rows left out
+            val shown = _rows.value.indices.filterNot { _rows.value[it].isEmptyRow() }
+            lastVisible = maxOf(lastVisible, shown.getOrElse(index) { specs.lastIndex })
             loadVisible()
         }
 
@@ -91,6 +114,7 @@ class TmdbBrowseViewModel
 
         private fun launchRow(index: Int) {
             val spec = specs[index]
+            val loading = generation
             _rows.update { rows -> rows.toMutableList().also { it[index] = HomeRowLoadingState.Loading(spec.title) } }
             viewModelScope.launchIO {
                 val state =
@@ -98,9 +122,22 @@ class TmdbBrowseViewModel
                         try {
                             val cards =
                                 when (val kind = spec.kind) {
-                                    is BrowseRowKind.Query -> catalogRepository.queryRow(kind.query, kind.exclude)
-                                    is BrowseRowKind.SagaParts -> catalogRepository.sagaRow(kind.saga)
-                                    is BrowseRowKind.CollectionParts -> catalogRepository.collectionRow(kind.collectionId)
+                                    is BrowseRowKind.Query -> {
+                                        catalogRepository.queryRow(
+                                            kind.query,
+                                            kind.exclude,
+                                            kind.pages,
+                                            kind.onePerSaga,
+                                        )
+                                    }
+
+                                    is BrowseRowKind.SagaParts -> {
+                                        catalogRepository.sagaRow(kind.saga)
+                                    }
+
+                                    is BrowseRowKind.CollectionParts -> {
+                                        catalogRepository.collectionRow(kind.collectionId)
+                                    }
                                 }
                             val title =
                                 (spec.kind as? BrowseRowKind.CollectionParts)
@@ -115,7 +152,9 @@ class TmdbBrowseViewModel
                             HomeRowLoadingState.Error(spec.title, exception = e)
                         }
                     }
-                _rows.update { rows -> rows.toMutableList().also { it[index] = state } }
+                if (loading == generation) _rows.update { rows -> rows.toMutableList().also { it[index] = state } }
             }
         }
     }
+
+private fun HomeRowLoadingState.isEmptyRow() = this is HomeRowLoadingState.Success && items.isEmpty()

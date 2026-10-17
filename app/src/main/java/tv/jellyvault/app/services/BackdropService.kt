@@ -71,9 +71,9 @@ class BackdropService
 
         companion object {
             /**
-             * Backdrops cover ~70% of a 1080p screen: no need to download and decode the original size
+             * Backdrops are drawn full-width on a 1080p screen: 1280 px came out stretched and soft
              */
-            const val BACKDROP_FILL_WIDTH = 1280
+            const val BACKDROP_FILL_WIDTH = 1920
         }
 
         /**

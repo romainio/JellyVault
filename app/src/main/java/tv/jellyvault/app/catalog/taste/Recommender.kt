@@ -8,6 +8,7 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import timber.log.Timber
+import tv.jellyvault.app.catalog.CatalogFilter
 import tv.jellyvault.app.catalog.CatalogRepository
 import tv.jellyvault.app.catalog.MediaCard
 import tv.jellyvault.app.catalog.key
@@ -43,6 +44,8 @@ class Recommender
             val results: List<SeedRecommendations>,
             val negative: List<SeedRecommendations> = emptyList(),
             val version: Long = 0,
+            /** The catalog limits the recommendations were filtered with */
+            val filter: CatalogFilter = CatalogFilter(),
         ) {
             /** Pour toi: wide but well rated, and pushed away from what the user disliked */
             fun forYou() = rankForYou(results, history.watched, FOR_YOU_SIZE, negative, FOR_YOU_MIN_RATING, FOR_YOU_MIN_VOTES)
@@ -89,7 +92,9 @@ class Recommender
                 val cacheKey = Triple(taste.userId, mediaType, TmdbLanguage.current().tag)
                 val version = taste.version()
                 // New IMDb ratings or another TMDB account: recompute at once
-                cache[cacheKey]?.takeIf { now() - it.at < TTL_MS && it.version == version }?.let { return it }
+                val filter = CatalogFilter.current
+                // New limits in Settings › Catalog too
+                cache[cacheKey]?.takeIf { now() - it.at < TTL_MS && it.version == version && it.filter == filter }?.let { return it }
                 val history = taste.history(mediaType)
                 val semaphore = Semaphore(PARALLEL_CALLS)
                 val (results, negative) =
@@ -104,7 +109,7 @@ class Recommender
                             }
                         positive.map { it.await() } to against.map { it.await() }
                     }
-                val computed = Computed(now(), history, results, negative, version)
+                val computed = Computed(now(), history, results, negative, version, filter)
                 // Nothing to recommend (no history, TMDB down): try again next time instead of caching the emptiness
                 if (results.any { it.items.isNotEmpty() }) {
                     cache[cacheKey] = computed

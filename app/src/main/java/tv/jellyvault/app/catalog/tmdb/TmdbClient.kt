@@ -176,6 +176,19 @@ class TmdbClient
             )
         }
 
+        /**
+         * The movies [personId] directed, most popular first (TMDB's crew filter of discover also matches producers and writers)
+         */
+        suspend fun directedMovies(personId: Int): List<TmdbItem> =
+            cached("person/$personId/movie_credits") { url, path ->
+                getJson<TmdbRawPersonCredits>(url, path)
+                    .crew
+                    .filter { it.job == "Director" }
+                    .mapNotNull { it.toItem(TmdbMediaType.MOVIE) }
+                    .distinctBy { it.tmdbId }
+                    .sortedByDescending { it.popularity }
+            }.withinCatalogFilter(filter())
+
         suspend fun collection(id: Int): TmdbCollection =
             cached("collection/$id") { url, path -> getJson<TmdbRawCollection>(url, path).toCollection() }
 

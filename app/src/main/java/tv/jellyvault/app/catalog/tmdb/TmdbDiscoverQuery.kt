@@ -9,6 +9,9 @@ enum class TmdbSort(
     RATING("vote_average.desc"),
     REVENUE("revenue.desc"),
 
+    /** Most voted first: the best known titles of a well-rated band */
+    VOTES("vote_count.desc"),
+
     /** Oldest first, e.g. a studio's films in the order they came out */
     RELEASE_ASC("primary_release_date.asc"),
 }

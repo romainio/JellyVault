@@ -11,7 +11,10 @@ import tv.jellyvault.app.catalog.tmdb.mainstream
 private const val ANIMATION = 16
 
 /** TMDB recommends a few titles nobody has heard of: below this many votes they are left out */
-private const val SIMILAR_MIN_VOTES = 300
+private const val SIMILAR_MIN_VOTES_MOVIE = 300
+
+/** Series collect fewer votes, French ones especially */
+private const val SIMILAR_MIN_VOTES_TV = 80
 
 /** A director with fewer other films than this gets the genre row instead */
 internal const val DIRECTOR_MIN_TITLES = 3
@@ -44,7 +47,7 @@ internal fun fittingRecommendations(
     return candidates
         .filter { it.key != details.item.key && it.key !in shown }
         .filter { cartoon || ANIMATION !in it.genreIds }
-        .filter { it.voteCount >= SIMILAR_MIN_VOTES }
+        .filter { it.voteCount >= if (it.mediaType == TmdbMediaType.MOVIE) SIMILAR_MIN_VOTES_MOVIE else SIMILAR_MIN_VOTES_TV }
         .mainstream()
 }
 
@@ -66,5 +69,5 @@ internal fun sameGenreQuery(details: TmdbDetails): TmdbDiscoverQuery? {
     )
 }
 
-internal fun directorQuery(director: TmdbNamed) =
-    TmdbDiscoverQuery(TmdbMediaType.MOVIE, crewId = director.id, minVotes = DIRECTOR_MIN_VOTES)
+/** The films of a director that are known enough to suggest */
+internal fun List<TmdbItem>.knownFilms() = filter { it.voteCount >= DIRECTOR_MIN_VOTES }

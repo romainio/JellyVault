@@ -83,6 +83,10 @@ sealed interface BrowseRowKind {
          * (a studio's "top rated" is mostly its "popular" row again)
          */
         val exclude: List<TmdbDiscoverQuery> = emptyList(),
+        /** TMDB pages of 20 titles: more for a row that must be complete (every Marvel film in order) */
+        val pages: Int = 1,
+        /** Only the first film of each saga (no "Part II" right after "Part I") */
+        val onePerSaga: Boolean = false,
     ) : BrowseRowKind
 
     data class SagaParts(
@@ -111,6 +115,8 @@ private val CLASSICS_BEFORE: LocalDate = LocalDate.of(1999, 12, 31)
 /**
  * Hidden gems: much liked, known enough to be trusted, not the hits everyone has seen. Old enough for the rating to have
  * settled (fresh releases start high), French or English, no cartoons, documentaries or TV films among live-action genres.
+ * Best known first: sorting by rating put niche titles with inflated ratings first (Gabriel's Inferno). Older films have
+ * the Classics row.
  */
 private const val GEMS_MIN_RATING_MOVIE = 7.2
 private const val GEMS_MIN_VOTES_MOVIE = 1200
@@ -120,6 +126,7 @@ private const val GEMS_MIN_VOTES_TV = 300
 private const val GEMS_MAX_VOTES_TV = 2000
 private const val GEMS_SETTLED_MONTHS = 18L
 private val GEMS_LANGUAGES = listOf("fr", "en")
+private val GEMS_SINCE: LocalDate = LocalDate.of(1990, 1, 1)
 
 /** Animation has its own genre: kept out of the live-action genres (no anime among the dramas) */
 private const val ANIMATION = 16
@@ -199,10 +206,11 @@ internal fun gemsQuery(
             if (genre !in CARTOON_GENRES) add(FAMILY)
         }.filter { it != ownGenre }.distinct()
     return base.copy(
-        sort = TmdbSort.RATING,
+        sort = TmdbSort.VOTES,
         minRating = if (movie) GEMS_MIN_RATING_MOVIE else GEMS_MIN_RATING_TV,
         minVotes = if (movie) GEMS_MIN_VOTES_MOVIE else GEMS_MIN_VOTES_TV,
         maxVotes = if (movie) GEMS_MAX_VOTES_MOVIE else GEMS_MAX_VOTES_TV,
+        releasedAfter = GEMS_SINCE,
         releasedBefore = today.minusMonths(GEMS_SETTLED_MONTHS),
         // Anime are the gems of animation
         originalLanguages = if (genre in CARTOON_GENRES) GEMS_LANGUAGES + "ja" else GEMS_LANGUAGES,
@@ -235,7 +243,16 @@ fun browseRows(
         // What is popular, each saga, then every film in release order
         MARVEL_COMPANY -> {
             listOf(row(R.string.discover_popular, base.popular())) + sagas +
-                row(R.string.browse_release_order, base.copy(sort = TmdbSort.RELEASE_ASC, minVotes = NEW_MIN_VOTES_BRAND))
+                row(
+                    R.string.browse_release_order,
+                    base.copy(
+                        sort = TmdbSort.RELEASE_ASC,
+                        releasedAfter = MCU_START,
+                        minVotes = MCU_MIN_VOTES,
+                        withoutGenreIds = listOf(ANIMATION),
+                    ),
+                    pages = RELEASE_ORDER_PAGES,
+                )
         }
 
         else -> {
@@ -248,13 +265,15 @@ private fun row(
     title: StringProvider,
     query: TmdbDiscoverQuery,
     exclude: List<TmdbDiscoverQuery> = emptyList(),
-) = BrowseRowSpec(BrowseRowKind.Query(query, exclude), title)
+    pages: Int = 1,
+) = BrowseRowSpec(BrowseRowKind.Query(query, exclude, pages), title)
 
 private fun row(
     @StringRes title: Int,
     query: TmdbDiscoverQuery,
     exclude: List<TmdbDiscoverQuery> = emptyList(),
-) = row(ResStringProvider(title), query, exclude)
+    pages: Int = 1,
+) = row(ResStringProvider(title), query, exclude, pages)
 
 private fun sagaRow(saga: StudioSaga) =
     BrowseRowSpec(BrowseRowKind.CollectionParts(saga.collectionId), StringStringProvider(saga.name), titleFromCollection = true)
@@ -274,7 +293,12 @@ private fun genreRows(
         add(row(R.string.discover_popular, popular))
         add(row(R.string.discover_top_rated, top, exclude = listOf(popular)))
         add(row(R.string.browse_new, base.copy(releasedAfter = today.minusYears(1), mainstreamOnly = true)))
-        add(row(R.string.browse_gems, gems, exclude = listOf(popular, top)))
+        add(
+            BrowseRowSpec(
+                BrowseRowKind.Query(gems, exclude = listOf(popular, top), onePerSaga = true),
+                ResStringProvider(R.string.browse_gems),
+            ),
+        )
         add(row(R.string.browse_classics, classics))
         genreThemes(target.genre, target.mediaType).forEach { add(row(it.titleRes, it.query)) }
         if (movie) {
@@ -341,6 +365,13 @@ private const val DISNEY_ANIMATION_COMPANY = 6125
 private const val DISNEY_PRODUCTIONS_COMPANY = 3166
 private const val PIXAR_COMPANY = 3
 private const val MARVEL_COMPANY = 420
+
+/** The MCU: from Iron Man, without the cartoons, shorts and older co-productions also filed under Marvel Studios */
+private val MCU_START: LocalDate = LocalDate.of(2008, 1, 1)
+private const val MCU_MIN_VOTES = 1000
+
+/** About 40 Marvel Studios films so far: 3 pages leave room for the next ones */
+private const val RELEASE_ORDER_PAGES = 3
 private const val DISNEY_MIN_VOTES = 300
 
 /** Up to Chicken Little: the hand-drawn era */

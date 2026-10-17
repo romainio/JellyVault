@@ -20,7 +20,7 @@ import javax.inject.Inject
 private const val CARD_BACKDROP_SIZE = "w780"
 
 /** Only titles everyone knows: the picture should say the genre at a glance */
-private const val PICTURE_MIN_VOTES = 3000
+private const val PICTURE_MIN_VOTES = 1000
 private const val ANIMATION = 16
 
 /**

@@ -40,7 +40,7 @@ class TmdbBrowseViewModelTest {
     fun setUp() {
         Dispatchers.setMain(dispatcher)
         JvDispatchers.configure(dispatcher)
-        coEvery { catalog.queryRow(any(), any()) } returns listOf(card(1))
+        coEvery { catalog.queryRow(any(), any(), any(), any()) } returns listOf(card(1))
         coEvery { catalog.queryPage(any(), any()) } returns (listOf(card(2)) to 1)
         coEvery { catalog.sagaRow(any()) } returns listOf(card(3), card(4))
         coEvery { catalog.collectionRow(any()) } returns listOf(card(5))
@@ -75,12 +75,17 @@ class TmdbBrowseViewModelTest {
     }
 
     @Test
-    fun empty_rows_are_hidden() {
-        coEvery { catalog.queryRow(any(), any()) } returns emptyList()
+    fun empty_rows_are_left_out_so_the_remote_can_move_past_them() {
+        coEvery { catalog.queryRow(any(), any(), any(), any()) } returns emptyList()
         val vm = vm()
         vm.init(BrowseTarget.Studio(CatalogStudio.PIXAR))
+        // The 4 query rows loaded empty: the first row on screen is the first saga
         val first = vm.rows.value.first() as HomeRowLoadingState.Success
-        assertEquals(0, first.items.size)
+        assertEquals(StringStringProvider("Toy Story"), first.title)
+        assertEquals(5, vm.rows.value.size)
+        // Row 1 on screen is spec 5: the rows after it start loading
+        vm.onVisibleRow(1)
+        assertEquals(5, vm.rows.value.count { it is HomeRowLoadingState.Success })
     }
 
     @Test
@@ -98,7 +103,7 @@ class TmdbBrowseViewModelTest {
         vm.init(target)
         vm.init(target)
         // Popular, new, top rated, classics, then the first saga
-        coVerify(exactly = 4) { catalog.queryRow(any(), any()) }
+        coVerify(exactly = 4) { catalog.queryRow(any(), any(), any(), any()) }
         coVerify(exactly = 1) { catalog.collectionRow(10194) }
         assertNotNull(vm.grid.value)
     }
