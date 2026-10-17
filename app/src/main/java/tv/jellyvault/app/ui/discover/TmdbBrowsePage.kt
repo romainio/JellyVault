@@ -101,6 +101,8 @@ fun TmdbBrowsePage(
         }
     }
     val cardWidthPx = with(LocalDensity.current) { GRID_CARD_WIDTH.roundToPx() }
+    // Not on every recomposition (each D-pad press): new line lists would recompose every visible grid line
+    val gridLines = remember(gridItems) { gridItems.chunked(GRID_COLUMNS) }
     val showLogo = preferences.appPreferences.interfacePreferences.showLogos
     HomePageContent(
         homeRows = rows,
@@ -158,7 +160,7 @@ fun TmdbBrowsePage(
                             )
                         }
                     }
-                    itemsIndexed(gridItems.chunked(GRID_COLUMNS), key = { index, _ -> "grid_$index" }) { lineIndex, line ->
+                    itemsIndexed(gridLines, key = { index, _ -> "grid_$index" }) { lineIndex, line ->
                         // Ask for the next page when this line is on screen, again whenever a page arrives
                         // (a page of titles already shown adds no new line)
                         LaunchedEffect(lineIndex, gridItems.size) { grid.onPosition((lineIndex + 1) * GRID_COLUMNS) }

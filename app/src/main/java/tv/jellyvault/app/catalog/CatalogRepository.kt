@@ -3,6 +3,8 @@ package tv.jellyvault.app.catalog
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import timber.log.Timber
 import tv.jellyvault.app.catalog.library.LibraryIndex
 import tv.jellyvault.app.catalog.library.LibraryItemSource
@@ -243,20 +245,31 @@ class CatalogRepository
          */
         suspend fun weeklyTop10Row(): List<MediaCard> = toCards(topTenSeries())
 
-        private suspend fun topTenSeries(): List<TmdbItem> =
-            weeklyTop10.titles().mapIndexedNotNull { index, title ->
-                val match =
-                    try {
-                        tmdb.search(title).items.firstOrNull { it.mediaType == TmdbMediaType.TV }
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (e: Exception) {
-                        Timber.w(e, "No TMDB match for %s", title)
-                        null
-                    }
-                // Rank from the list, even when an earlier title had no match
-                match?.copy(title = "${index + 1}. ${match.title}")
+        private suspend fun topTenSeries(): List<TmdbItem> {
+            // Ten searches side by side instead of one after the other
+            val semaphore = Semaphore(TOP_TEN_PARALLEL_SEARCHES)
+            return coroutineScope {
+                weeklyTop10
+                    .titles()
+                    .mapIndexed { index, title ->
+                        async {
+                            val match =
+                                semaphore.withPermit {
+                                    try {
+                                        tmdb.search(title).items.firstOrNull { it.mediaType == TmdbMediaType.TV }
+                                    } catch (e: CancellationException) {
+                                        throw e
+                                    } catch (e: Exception) {
+                                        Timber.w(e, "No TMDB match for %s", title)
+                                        null
+                                    }
+                                }
+                            // Rank from the list, even when an earlier title had no match
+                            match?.copy(title = "${index + 1}. ${match.title}")
+                        }
+                    }.mapNotNull { it.await() }
             }
+        }
 
         /**
          * The movies of any TMDB collection, in release order
@@ -334,6 +347,7 @@ internal fun sagaKey(title: String): String {
     }
 }
 
+private const val TOP_TEN_PARALLEL_SEARCHES = 4
 private const val GENRE_MIN_VOTES = 200
 private const val GENRE_MIN_RATING = 5.0
 

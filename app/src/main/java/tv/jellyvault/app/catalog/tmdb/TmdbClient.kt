@@ -3,6 +3,7 @@ package tv.jellyvault.app.catalog.tmdb
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.decodeFromStream
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -189,6 +190,24 @@ class TmdbClient
                     .sortedByDescending { it.popularity }
             }.withinCatalogFilter(filter())
 
+        /**
+         * The first director of a movie, from its credits only (much lighter than the whole title page)
+         */
+        suspend fun movieDirector(movieId: Int): TmdbNamed? =
+            cached("movie/$movieId/credits") { url, path ->
+                Optional(
+                    getJson<TmdbRawCredits>(url, path)
+                        .crew
+                        .firstOrNull { it.job == "Director" && it.id > 0 }
+                        ?.let { TmdbNamed(it.id, it.name) },
+                )
+            }.value
+
+        /** [cached] keeps non-null values */
+        private data class Optional<T>(
+            val value: T?,
+        )
+
         suspend fun collection(id: Int): TmdbCollection =
             cached("collection/$id") { url, path -> getJson<TmdbRawCollection>(url, path).toCollection() }
 
@@ -265,7 +284,8 @@ class TmdbClient
                         if (!response.isSuccessful) {
                             throw TmdbException("TMDB HTTP ${response.code} for $path")
                         }
-                        json.decodeFromString<T>(response.body.string())
+                        // Parsed as it streams in: no copy of a whole title page as one big string on a small heap
+                        json.decodeFromStream<T>(response.body.byteStream())
                     }
                 } catch (e: IOException) {
                     throw TmdbException("TMDB unreachable", e)

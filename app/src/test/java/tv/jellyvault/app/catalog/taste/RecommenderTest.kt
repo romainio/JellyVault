@@ -36,7 +36,11 @@ class RecommenderTest {
             }
         }
     private val affinityStore = mockk<TasteAffinityStore>(relaxed = true)
-    private val recommender = Recommender(taste, tmdb, catalog, affinityStore)
+    private val directorDir =
+        kotlin.io.path
+            .createTempDirectory("directors")
+            .toFile()
+    private val recommender = Recommender(taste, tmdb, catalog, affinityStore, DirectorStore(directorDir))
 
     private fun item(id: Int) = TmdbItem(id, movie, "T$id", null, "/p.jpg", null, "2020-01-01", 7.5, emptyList(), "en", 1000, 10.0)
 

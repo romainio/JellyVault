@@ -23,6 +23,7 @@ import tv.jellyvault.app.catalog.library.JellyfinLibraryItemSource
 import tv.jellyvault.app.catalog.library.LibraryItemSource
 import tv.jellyvault.app.catalog.shelves.LocalShelfSource
 import tv.jellyvault.app.catalog.shelves.ShelfSource
+import tv.jellyvault.app.catalog.taste.DirectorStore
 import tv.jellyvault.app.catalog.taste.JellyfinTasteSource
 import tv.jellyvault.app.catalog.taste.TasteAffinityStore
 import tv.jellyvault.app.catalog.taste.TasteSource
@@ -63,6 +64,12 @@ object CatalogModule {
     fun tasteAffinityStore(
         @ApplicationContext context: Context,
     ): TasteAffinityStore = TasteAffinityStore(File(context.filesDir, TASTE_DIR))
+
+    @Provides
+    @Singleton
+    fun directorStore(
+        @ApplicationContext context: Context,
+    ): DirectorStore = DirectorStore(File(context.filesDir, TASTE_DIR))
 
     @Provides
     @Singleton

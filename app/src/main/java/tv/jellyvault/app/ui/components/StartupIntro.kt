@@ -115,7 +115,9 @@ fun StartupIntro(
         ) {
             val art = painterResource(R.drawable.jv_logo_art)
             val shape = painterResource(R.drawable.jv_logo_shape)
-            val pulse = bloom.value * (1f + IntroTiming.PULSE_DEPTH * sin(sweep.value * Math.PI.toFloat()))
+            // Read while drawing only: reading the animations here recomposed the whole intro on every frame, on the
+            // main thread the home is composing on underneath
+            val pulse = { bloom.value * (1f + IntroTiming.PULSE_DEPTH * sin(sweep.value * Math.PI.toFloat())) }
             // Full-screen layer: a layer the size of the logo would cut the bloom off at its edges
             Box(
                 contentAlignment = Alignment.Center,
@@ -139,9 +141,9 @@ fun StartupIntro(
                     // Glow from the traced outline, tinted: wide violet, tighter lavender, then a thin bright rim.
                     // The artwork's own colours would wash out towards white once blurred
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                        GlowLayer(shape, IntroColors.Violet, 26.dp, 0.55f * pulse)
-                        GlowLayer(shape, IntroColors.Lavender, 8.dp, 0.6f * pulse)
-                        GlowLayer(shape, IntroColors.Rim, 3.dp, 0.5f * pulse)
+                        GlowLayer(shape, IntroColors.Violet, 26.dp) { 0.55f * pulse() }
+                        GlowLayer(shape, IntroColors.Lavender, 8.dp) { 0.6f * pulse() }
+                        GlowLayer(shape, IntroColors.Rim, 3.dp) { 0.5f * pulse() }
                     }
                     // The artwork keeps its glassy shading; the band of light only lights its pixels (SrcAtop)
                     Image(
@@ -181,7 +183,7 @@ private fun GlowLayer(
     shape: Painter,
     color: Color,
     radius: Dp,
-    strength: Float,
+    strength: () -> Float,
 ) {
     Image(
         painter = shape,
@@ -191,7 +193,7 @@ private fun GlowLayer(
             Modifier
                 .fillMaxSize()
                 .graphicsLayer {
-                    alpha = strength.coerceIn(0f, 1f)
+                    alpha = strength().coerceIn(0f, 1f)
                     // Per-draw alpha: an offscreen buffer the size of the logo would clip the blur
                     compositingStrategy = CompositingStrategy.ModulateAlpha
                 }.blur(radius, BlurredEdgeTreatment.Unbounded),

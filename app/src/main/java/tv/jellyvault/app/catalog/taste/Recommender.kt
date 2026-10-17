@@ -45,6 +45,7 @@ class Recommender
         private val tmdb: TmdbClient,
         private val catalog: CatalogRepository,
         private val affinityStore: TasteAffinityStore,
+        private val directorStore: DirectorStore,
     ) {
         private class Computed(
             val at: Long,
@@ -139,24 +140,28 @@ class Recommender
         suspend fun favoriteDirectors(): DirectorCards? {
             val history = compute(TmdbMediaType.MOVIE).history
             val semaphore = Semaphore(PARALLEL_CALLS)
-            // The title pages of the liked films are cached for hours: only the first run asks TMDB
+            // Kept on disk: only films rated since the last start are looked up
             val directors =
-                coroutineScope {
-                    history.liked.take(MAX_LIKED_FOR_DIRECTORS).map { film ->
-                        async {
-                            semaphore.withPermit {
-                                try {
-                                    tmdb.details(TmdbMediaType.MOVIE, film.tmdbId).director
-                                } catch (e: CancellationException) {
-                                    throw e
-                                } catch (e: Exception) {
-                                    Timber.w(e, "No director for %s", film.tmdbId)
-                                    null
+                directorStore.directors(history.liked.take(MAX_LIKED_FOR_DIRECTORS).map { it.tmdbId }) { missing ->
+                    coroutineScope {
+                        missing
+                            .map { id ->
+                                async {
+                                    semaphore.withPermit {
+                                        try {
+                                            id to tmdb.movieDirector(id)
+                                        } catch (e: CancellationException) {
+                                            throw e
+                                        } catch (e: Exception) {
+                                            Timber.w(e, "No director for %s", id)
+                                            null
+                                        }
+                                    }
                                 }
-                            }
-                        }
+                            }.mapNotNull { it.await() }
+                            .toMap()
                     }
-                }.map { it.await() }
+                }
             val favorites = rankDirectors(directors, DIRECTOR_ROWS_MAX, DIRECTOR_MIN_LIKED)
             if (favorites.isEmpty()) return null
             val films =

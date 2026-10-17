@@ -141,12 +141,13 @@ fun HomePage(
 
             val onFocusPosition = remember { { it: RowColumn -> position = it } }
             val currentHomePrefs by rememberUpdatedState(preferences.appPreferences.homePagePreferences)
+            val currentHomeRows by rememberUpdatedState(homeRows)
             val onClickItem =
                 remember {
                     { clickedPosition: RowColumn, item: BaseItem ->
                         position = clickedPosition
                         if (currentHomePrefs.clickToPlay &&
-                            homeRows.getOrNull(clickedPosition.row)?.isContinueWatchingNextUp == true
+                            currentHomeRows.getOrNull(clickedPosition.row)?.isContinueWatchingNextUp == true
                         ) {
                             viewModel.navigationManager.navigateTo(Destination.Playback(item))
                         } else {
@@ -395,8 +396,13 @@ fun HomePageContent(
             // Modern rows keep the focused card at the start of its row, where its details are written
             val shelfBringIntoViewSpec =
                 remember(density) { ScrollToTopBringIntoViewSpec(with(density) { Shelf.SPACING.toPx() }) }
+            val rowsBringIntoViewSpec = remember(spaceAbovePx) { ScrollToTopBringIntoViewSpec(spaceAbovePx) }
+            // Read through states inside the rows: the rows' lambda must not change on every D-pad press, or every
+            // visible row recomposes
+            val positionState = rememberUpdatedState(position)
+            val focusedItemState = rememberUpdatedState(focusedItem)
             CompositionLocalProvider(
-                LocalBringIntoViewSpec provides ScrollToTopBringIntoViewSpec(spaceAbovePx),
+                LocalBringIntoViewSpec provides rowsBringIntoViewSpec,
             ) {
                 LazyColumn(
                     state = listState,
@@ -569,9 +575,9 @@ fun HomePageContent(
                                                     )
                                                 },
                                             )
-                                            if (modernRows && position.row == rowIndex) {
+                                            if (modernRows && positionState.value.row == rowIndex) {
                                                 ShelfInfo(
-                                                    item = focusedItem,
+                                                    item = focusedItemState.value,
                                                     modifier = Modifier.padding(start = Shelf.SPACING + 8.dp, top = 4.dp, bottom = 12.dp),
                                                 )
                                             }

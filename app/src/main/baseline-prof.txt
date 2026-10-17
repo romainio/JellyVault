@@ -1,0 +1,17 @@
+# Compiled ahead of time when the app is installed or updated, instead of being interpreted until the TV's idle
+# compilation (which a TV that is rarely idle may never run). Measured on a TCL Android 12 TV before this file:
+# 44 ms median frame with the app running uncompiled.
+# The whole app: rows, cards, catalog and player code all run on the first screens
+HSPLtv/jellyvault/app/**->**(**)**
+Ltv/jellyvault/app/**;
+# Libraries on every screen that ship no profile of their own
+HSPLcoil3/**->**(**)**
+Lcoil3/**;
+HSPLokhttp3/**->**(**)**
+Lokhttp3/**;
+HSPLokio/**->**(**)**
+Lokio/**;
+HSPLorg/jellyfin/sdk/**->**(**)**
+Lorg/jellyfin/sdk/**;
+HSPLkotlinx/serialization/**->**(**)**
+Lkotlinx/serialization/**;

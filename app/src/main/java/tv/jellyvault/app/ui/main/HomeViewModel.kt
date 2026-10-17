@@ -441,7 +441,13 @@ class HomeViewModel
                             .map { (url, heightPx) ->
                                 async {
                                     val request = ImageRequest.Builder(context).data(url)
-                                    heightPx?.let { request.size(Dimension.Undefined, Dimension(it)) }
+                                    if (heightPx != null) {
+                                        request.size(Dimension.Undefined, Dimension(heightPx))
+                                    } else {
+                                        // The backdrop: screen-wide, never its original size (a 4K backdrop decoded whole
+                                        // took ~33 MB of the image cache and delayed the start)
+                                        request.size(Dimension(context.resources.displayMetrics.widthPixels), Dimension.Undefined)
+                                    }
                                     loader.execute(request.build())
                                 }
                             }.awaitAll()
