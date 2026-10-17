@@ -21,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -134,14 +135,20 @@ fun Backdrop(
                                             startX = if (isRtl) size.width else 0f,
                                             endX = if (isRtl) size.width - fadeEnd else fadeEnd,
                                         ),
+                                    // Only where the scrim shows: each full-screen pass costs a weak TV GPU several ms
+                                    topLeft = Offset(if (isRtl) size.width - fadeEnd else 0f, 0f),
+                                    size = Size(fadeEnd, size.height),
                                 )
+                                val fadeTop = size.height * BackdropGeometry.BOTTOM_FADE_START
                                 drawRect(
                                     brush =
                                         Brush.verticalGradient(
                                             colors = listOf(Color.Transparent, baseBackgroundColor),
-                                            startY = size.height * BackdropGeometry.BOTTOM_FADE_START,
+                                            startY = fadeTop,
                                             endY = size.height,
                                         ),
+                                    topLeft = Offset(0f, fadeTop),
+                                    size = Size(size.width, size.height - fadeTop),
                                 )
                             },
                 )
@@ -153,15 +160,15 @@ fun Backdrop(
                         .fillMaxSize()
                         .drawBehind {
                             if (enableTopScrim) {
+                                val scrimHeight = size.height * TOP_SCRIM_END_FRACTION
                                 drawRect(
                                     brush =
                                         Brush.verticalGradient(
-                                            colorStops =
-                                                arrayOf(
-                                                    0f to Color.Black.copy(alpha = TOP_SCRIM_ALPHA),
-                                                    TOP_SCRIM_END_FRACTION to Color.Transparent,
-                                                ),
+                                            colors = listOf(Color.Black.copy(alpha = TOP_SCRIM_ALPHA), Color.Transparent),
+                                            startY = 0f,
+                                            endY = scrimHeight,
                                         ),
+                                    size = Size(size.width, scrimHeight),
                                 )
                             }
                             if (dimAlpha > 0f) {

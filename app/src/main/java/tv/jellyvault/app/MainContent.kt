@@ -28,6 +28,7 @@ import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
+import androidx.tv.material3.SurfaceDefaults
 import tv.jellyvault.app.preferences.UserPreferences
 import tv.jellyvault.app.services.BackdropService
 import tv.jellyvault.app.services.NavigationManager
@@ -50,11 +51,11 @@ fun MainContent(
     modifier: Modifier = Modifier,
 ) {
     val preferences by rememberUpdatedState(userPreferences)
+    // The Surface paints the background once: a .background() on top of it was a second full-screen pass
     Surface(
-        modifier =
-            modifier
-                .background(MaterialTheme.colorScheme.background),
+        modifier = modifier,
         shape = RectangleShape,
+        colors = SurfaceDefaults.colors(containerColor = MaterialTheme.colorScheme.background),
     ) {
 //                            val backStack = rememberNavBackStack(SetupDestination.Loading)
 //                            setupNavigationManager.backStack = backStack

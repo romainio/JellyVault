@@ -30,6 +30,7 @@ import androidx.navigation3.runtime.NavBackStack
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
+import androidx.tv.material3.SurfaceDefaults
 import dagger.hilt.android.AndroidEntryPoint
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -239,9 +240,14 @@ class MainActivity : AppCompatActivity() {
         }
 
         viewModel.appStart(intent)
+        // The app paints the whole screen itself (intro, then its own background): the window's black under it was one
+        // more full-screen pass per frame for the TV GPU
+        window.setBackgroundDrawable(null)
         setContent {
             MaterialTheme(colorScheme = PurpleThemeColors.darkScheme) {
-                Surface(Modifier.fillMaxSize()) {
+                // Transparent: the app content, the intro and the loading branch below paint their own background (one
+                // full-screen pass less per frame for the TV GPU)
+                Surface(Modifier.fillMaxSize(), colors = SurfaceDefaults.colors(containerColor = Color.Transparent)) {
                     val userPreferences by userPreferencesService.flow.collectAsState(null)
                     // The intro covers the start until the home is filled (rows and posters), or another first screen is there
                     val homeFilled by startupGate.open.collectAsState()
@@ -261,15 +267,14 @@ class MainActivity : AppCompatActivity() {
                             Timber.i("Showing loading page")
                             showLoading = true
                         }
-                        if (showLoading) {
-                            Box(
-                                modifier =
-                                    Modifier
-                                        .fillMaxSize()
-                                        .background(Color.Black),
-                            ) {
-                                LoadingPage()
-                            }
+                        // Black right away: neither the window nor the surface above paint a background any more
+                        Box(
+                            modifier =
+                                Modifier
+                                    .fillMaxSize()
+                                    .background(Color.Black),
+                        ) {
+                            if (showLoading) LoadingPage()
                         }
                     } else {
                         userPreferences?.let { userPreferences ->
