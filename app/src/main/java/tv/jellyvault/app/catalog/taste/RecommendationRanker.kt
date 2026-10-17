@@ -3,6 +3,7 @@ package tv.jellyvault.app.catalog.taste
 import tv.jellyvault.app.catalog.key
 import tv.jellyvault.app.catalog.library.TmdbKey
 import tv.jellyvault.app.catalog.tmdb.TmdbItem
+import tv.jellyvault.app.catalog.tmdb.TmdbNamed
 import tv.jellyvault.app.catalog.tmdb.isMainstream
 
 /**
@@ -109,4 +110,36 @@ fun becauseRows(
         rows += BecauseRow(seed, fresh)
     }
     return rows
+}
+
+/**
+ * The directors behind most of [likedDirectors] (one entry per liked film, null when unknown), at least [minLiked] films
+ * each, most liked first and the most recent one on ties
+ */
+fun rankDirectors(
+    likedDirectors: List<TmdbNamed?>,
+    max: Int,
+    minLiked: Int,
+): List<TmdbNamed> =
+    likedDirectors
+        .filterNotNull()
+        .groupBy { it.id }
+        .values
+        .filter { it.size >= minLiked }
+        // groupBy keeps the first appearance order: a stable sort keeps the most recent first on ties
+        .sortedByDescending { it.size }
+        .take(max)
+        .map { it.first() }
+
+/**
+ * The directors' films, one of each in turn (most popular first), without what the user has seen or nobody knows
+ */
+fun mixDirectorFilms(
+    films: List<List<TmdbItem>>,
+    watched: Set<TmdbKey>,
+    minVotes: Int,
+): List<TmdbItem> {
+    val lists = films.map { list -> list.filter { it.key !in watched && it.voteCount >= minVotes } }
+    val longest = lists.maxOfOrNull { it.size } ?: 0
+    return (0 until longest).flatMap { i -> lists.mapNotNull { it.getOrNull(i) } }.distinctBy { it.key }
 }

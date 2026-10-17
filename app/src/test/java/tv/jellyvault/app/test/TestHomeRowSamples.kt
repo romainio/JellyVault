@@ -85,6 +85,7 @@ class TestHomeRowSamples {
                 HomeRowConfig.TmdbForYou(TmdbMediaType.MOVIE),
                 HomeRowConfig.TmdbBecause(TmdbMediaType.TV, 1),
                 HomeRowConfig.TmdbShelves(),
+                HomeRowConfig.TmdbDirectors(),
                 HomeRowConfig.TmdbWatchlist(),
                 HomeRowConfig.TmdbShelf("fr_films"),
             )
@@ -114,6 +115,7 @@ class TestHomeRowSamples {
                 is HomeRowConfig.TmdbGenre -> foundTypes.add(it::class)
                 is HomeRowConfig.TmdbForYou -> foundTypes.add(it::class)
                 is HomeRowConfig.TmdbBecause -> foundTypes.add(it::class)
+                is HomeRowConfig.TmdbDirectors -> foundTypes.add(it::class)
                 is HomeRowConfig.TmdbShelves -> foundTypes.add(it::class)
                 is HomeRowConfig.TmdbWatchlist -> foundTypes.add(it::class)
                 is HomeRowConfig.TmdbShelf -> foundTypes.add(it::class)

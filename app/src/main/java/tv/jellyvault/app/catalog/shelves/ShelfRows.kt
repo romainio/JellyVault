@@ -40,6 +40,7 @@ private fun HomeRowConfig.isCatalogRow() =
         this is HomeRowConfig.TmdbGenre ||
         this is HomeRowConfig.TmdbForYou ||
         this is HomeRowConfig.TmdbBecause ||
+        this is HomeRowConfig.TmdbDirectors ||
         this is HomeRowConfig.TmdbShelves ||
         this is HomeRowConfig.TmdbWatchlist
 

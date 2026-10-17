@@ -43,7 +43,7 @@ class ShelfRowsTest {
     @Test
     fun the_default_home_puts_continue_third_and_the_styles_after_the_personal_rows() {
         val order = defaultHomeOrder(listOf(cont), defaultCatalogRows(true), emptyList())
-        assertEquals(listOf(trendM, forYouM, cont, trendT, becauseM, forYouT, list, shelves), order)
+        assertEquals(listOf(trendM, forYouM, cont, trendT, becauseM, HomeRowConfig.TmdbDirectors(), forYouT, list, shelves), order)
     }
 
     @Test

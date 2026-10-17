@@ -768,6 +768,7 @@ class HomeSettingsViewModel
                                 is HomeRowConfig.TmdbGenre,
                                 is HomeRowConfig.TmdbForYou,
                                 is HomeRowConfig.TmdbBecause,
+                                is HomeRowConfig.TmdbDirectors,
                                 is HomeRowConfig.TmdbShelves,
                                 is HomeRowConfig.TmdbShelf,
                                 is HomeRowConfig.TmdbWatchlist,

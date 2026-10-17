@@ -950,6 +950,8 @@
     <string name="shelf_documentaries">Documentaires</string>
     <string name="home_varied_styles">Styles variés</string>
     <string name="home_watchlist">Ta liste</string>
+    <string name="home_your_directors">Vos réalisateurs : %1$s</string>
+    <string name="home_your_directors_soon">Vos réalisateurs</string>
     <string name="tmdb_account">TMDB et notes IMDb</string>
     <string name="tmdb_account_summary">Les notes et la watchlist de ton compte TMDB, dont les notes IMDb synchronisées dessus</string>
     <string name="tmdb_account_explain">Tes notes et ta watchlist sont lues depuis ton compte TMDB, y compris les notes IMDb synchronisées dessus (par exemple par une synchro IMDb → TMDB que tu fais tourner). Lie ce compte une fois : les recommandations utilisent tes notes, les titres notés sont marqués vus, et « Ta liste » affiche ta watchlist.</string>

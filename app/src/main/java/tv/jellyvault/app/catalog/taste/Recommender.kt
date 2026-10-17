@@ -26,6 +26,14 @@ data class BecauseCards(
 )
 
 /**
+ * Films of the directors the user likes most, mixed, with their names for the row title
+ */
+data class DirectorCards(
+    val directors: List<String>,
+    val cards: List<MediaCard>,
+)
+
+/**
  * Personal recommendations from what the user watched: TMDB recommends titles after each recent or favorite
  * title, and the titles recommended most often rank first. Computed once per [TTL_MS] for all rows.
  */
@@ -124,6 +132,49 @@ class Recommender
                 computed
             }
 
+        /**
+         * "Vos réalisateurs": the films not seen yet of the directors behind most of the movies the user rated 8 or more
+         * (Nolan, Fincher...), mixed so each director shows up early. Null without at least two liked films by one director.
+         */
+        suspend fun favoriteDirectors(): DirectorCards? {
+            val history = compute(TmdbMediaType.MOVIE).history
+            val semaphore = Semaphore(PARALLEL_CALLS)
+            // The title pages of the liked films are cached for hours: only the first run asks TMDB
+            val directors =
+                coroutineScope {
+                    history.liked.take(MAX_LIKED_FOR_DIRECTORS).map { film ->
+                        async {
+                            semaphore.withPermit {
+                                try {
+                                    tmdb.details(TmdbMediaType.MOVIE, film.tmdbId).director
+                                } catch (e: CancellationException) {
+                                    throw e
+                                } catch (e: Exception) {
+                                    Timber.w(e, "No director for %s", film.tmdbId)
+                                    null
+                                }
+                            }
+                        }
+                    }
+                }.map { it.await() }
+            val favorites = rankDirectors(directors, DIRECTOR_ROWS_MAX, DIRECTOR_MIN_LIKED)
+            if (favorites.isEmpty()) return null
+            val films =
+                favorites.map { director ->
+                    try {
+                        tmdb.directedMovies(director.id)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Timber.w(e, "No films for %s", director.name)
+                        emptyList()
+                    }
+                }
+            val mixed = mixDirectorFilms(films, history.watched, DIRECTOR_FILM_MIN_VOTES)
+            if (mixed.size < BECAUSE_MIN_ITEMS) return null
+            return DirectorCards(favorites.map { it.name }, catalog.cards(mixed))
+        }
+
         private suspend fun recommendationsAfter(
             mediaType: TmdbMediaType,
             seed: TasteSeed,
@@ -147,5 +198,11 @@ class Recommender
             const val BECAUSE_ROW_SIZE = 20
             const val TTL_MS = 30 * 60 * 1000L
             const val PARALLEL_CALLS = 4
+
+            /** Liked films looked at for their director, most recently rated first */
+            const val MAX_LIKED_FOR_DIRECTORS = 60
+            const val DIRECTOR_ROWS_MAX = 3
+            const val DIRECTOR_MIN_LIKED = 2
+            const val DIRECTOR_FILM_MIN_VOTES = 300
         }
     }

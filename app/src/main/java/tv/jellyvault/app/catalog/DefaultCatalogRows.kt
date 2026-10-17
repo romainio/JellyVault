@@ -28,6 +28,7 @@ fun personalRows(): List<HomeRowConfig> =
     listOf(
         HomeRowConfig.TmdbForYou(TmdbMediaType.MOVIE),
         HomeRowConfig.TmdbBecause(TmdbMediaType.MOVIE, 0),
+        HomeRowConfig.TmdbDirectors(),
         HomeRowConfig.TmdbForYou(TmdbMediaType.TV),
     )
 
@@ -50,6 +51,10 @@ fun catalogRowTitle(config: HomeRowConfig): StringProvider? =
 
         is HomeRowConfig.TmdbBecause -> {
             ResStringProvider(R.string.discover_because_soon)
+        }
+
+        is HomeRowConfig.TmdbDirectors -> {
+            ResStringProvider(R.string.home_your_directors_soon)
         }
 
         is HomeRowConfig.TmdbWatchlist -> {
@@ -115,6 +120,22 @@ fun migrateHomeOrder(rows: List<HomeRowConfig>): List<HomeRowConfig> {
             third == HomeRowConfig.TmdbTrending(TmdbMediaType.TV, third.viewOptions)
     return if (oldDefault) listOf(second, third, first) + rows.drop(3) else rows
 }
+
+/**
+ * "Vos réalisateurs", once, after "Parce que vous avez regardé" (or the last personal row) of a saved home page.
+ * A home without personal rows is left alone: the user removed them.
+ */
+fun addDirectorsRow(rows: List<HomeRowConfig>): List<HomeRowConfig> {
+    if (rows.any { it is HomeRowConfig.TmdbDirectors }) return rows
+    val anchor =
+        rows.indexOfFirst { it is HomeRowConfig.TmdbBecause }.takeIf { it >= 0 }
+            ?: rows.indexOfLast { it is HomeRowConfig.TmdbForYou }.takeIf { it >= 0 }
+            ?: return rows
+    return rows.take(anchor + 1) + HomeRowConfig.TmdbDirectors() + rows.drop(anchor + 1)
+}
+
+/** "Christopher Nolan", "David Fincher" → "Nolan, Fincher" */
+fun directorNames(names: List<String>): String = names.joinToString(", ") { it.trim().substringAfterLast(' ') }
 
 /**
  * Saved home pages that show TMDB trending rows get the personal rows right after the last one

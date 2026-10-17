@@ -227,6 +227,17 @@ sealed interface HomeRowConfig {
     }
 
     /**
+     * "Vos réalisateurs": films not seen yet of the directors the user likes most; hidden without enough ratings
+     */
+    @Serializable
+    @SerialName("TmdbDirectors")
+    data class TmdbDirectors(
+        override val viewOptions: HomeRowViewOptions = HomeRowViewOptions(),
+    ) : HomeRowConfig {
+        override fun updateViewOptions(viewOptions: HomeRowViewOptions): TmdbDirectors = this.copy(viewOptions = viewOptions)
+    }
+
+    /**
      * "Ta liste": the watchlist of the linked TMDB account (the IMDb watchlist, copied by the sync)
      */
     @Serializable

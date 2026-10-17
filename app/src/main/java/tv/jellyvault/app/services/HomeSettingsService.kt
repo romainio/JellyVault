@@ -41,12 +41,14 @@ import org.jellyfin.sdk.model.api.request.GetStudiosRequest
 import timber.log.Timber
 import tv.jellyvault.app.R
 import tv.jellyvault.app.catalog.CatalogRepository
+import tv.jellyvault.app.catalog.DirectorsRowMigration
 import tv.jellyvault.app.catalog.HomeOrderMigration
 import tv.jellyvault.app.catalog.PersonalRowsMigration
 import tv.jellyvault.app.catalog.account.TmdbAccountRepository
 import tv.jellyvault.app.catalog.catalogRowTitle
 import tv.jellyvault.app.catalog.defaultCatalogRows
 import tv.jellyvault.app.catalog.defaultHomeOrder
+import tv.jellyvault.app.catalog.directorNames
 import tv.jellyvault.app.catalog.shelves.ShelfCatalog
 import tv.jellyvault.app.catalog.shelves.VarietyMigration
 import tv.jellyvault.app.catalog.taste.Recommender
@@ -259,11 +261,14 @@ class HomeSettingsService
                     // Resolve
                     val migrationDir = File(context.filesDir, CUSTOM_PREF_ID)
                     val rows =
-                        VarietyMigration(migrationDir).migrate(
+                        DirectorsRowMigration(migrationDir).migrate(
                             filename(userId),
-                            PersonalRowsMigration(migrationDir).migrate(
+                            VarietyMigration(migrationDir).migrate(
                                 filename(userId),
-                                HomeOrderMigration(migrationDir).migrate(filename(userId), settings.rows),
+                                PersonalRowsMigration(migrationDir).migrate(
+                                    filename(userId),
+                                    HomeOrderMigration(migrationDir).migrate(filename(userId), settings.rows),
+                                ),
                             ),
                         )
                     if (rows != settings.rows) {
@@ -356,6 +361,7 @@ class HomeSettingsService
             // The default already has the personal rows: a row the user removes later must not come back
             PersonalRowsMigration(File(context.filesDir, CUSTOM_PREF_ID)).markDone(filename(userId))
             VarietyMigration(File(context.filesDir, CUSTOM_PREF_ID)).markDone(filename(userId))
+            DirectorsRowMigration(File(context.filesDir, CUSTOM_PREF_ID)).markDone(filename(userId))
             return HomePageResolvedSettings(userId, rowConfig)
         }
 
@@ -605,6 +611,7 @@ class HomeSettingsService
                 is HomeRowConfig.TmdbGenre,
                 is HomeRowConfig.TmdbForYou,
                 is HomeRowConfig.TmdbBecause,
+                is HomeRowConfig.TmdbDirectors,
                 is HomeRowConfig.TmdbShelves,
                 is HomeRowConfig.TmdbShelf,
                 is HomeRowConfig.TmdbWatchlist,
@@ -1262,6 +1269,7 @@ class HomeSettingsService
                 is HomeRowConfig.TmdbGenre,
                 is HomeRowConfig.TmdbForYou,
                 is HomeRowConfig.TmdbBecause,
+                is HomeRowConfig.TmdbDirectors,
                 is HomeRowConfig.TmdbShelves,
                 is HomeRowConfig.TmdbShelf,
                 is HomeRowConfig.TmdbWatchlist,
@@ -1282,6 +1290,14 @@ class HomeSettingsService
                                         val because = recommender.because(row.mediaType).getOrNull(row.slot)
                                         if (because != null) title = ResArgStringProvider(R.string.discover_because, because.seedTitle)
                                         because?.cards.orEmpty()
+                                    }
+
+                                    is HomeRowConfig.TmdbDirectors -> {
+                                        val directors = recommender.favoriteDirectors()
+                                        if (directors != null) {
+                                            title = ResArgStringProvider(R.string.home_your_directors, directorNames(directors.directors))
+                                        }
+                                        directors?.cards.orEmpty()
                                     }
 
                                     is HomeRowConfig.TmdbWatchlist -> {

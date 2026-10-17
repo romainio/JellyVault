@@ -93,7 +93,10 @@ fun StartupIntro(
         }
         // Never keep the user waiting on the logo once the app is there; a stuck start does not trap them either
         val left = (IntroTiming.MAX_MILLIS - (System.currentTimeMillis() - start)).coerceAtLeast(0L)
-        withTimeoutOrNull(left) { snapshotFlow { currentReady }.first { it } }
+        withTimeoutOrNull(left) {
+            snapshotFlow { currentReady }.first { it }
+            delay(IntroTiming.SETTLE_MILLIS)
+        }
         visible = false
         StartupIntroOnce.played = true
     }
@@ -136,8 +139,8 @@ fun StartupIntro(
                     // Glow from the traced outline, tinted: wide violet, tighter lavender, then a thin bright rim.
                     // The artwork's own colours would wash out towards white once blurred
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                        GlowLayer(shape, IntroColors.Violet, 32.dp, 0.55f * pulse)
-                        GlowLayer(shape, IntroColors.Lavender, 10.dp, 0.6f * pulse)
+                        GlowLayer(shape, IntroColors.Violet, 26.dp, 0.55f * pulse)
+                        GlowLayer(shape, IntroColors.Lavender, 8.dp, 0.6f * pulse)
                         GlowLayer(shape, IntroColors.Rim, 3.dp, 0.5f * pulse)
                     }
                     // The artwork keeps its glassy shading; the band of light only lights its pixels (SrcAtop)
@@ -206,8 +209,8 @@ private object IntroColors {
 }
 
 private object IntroTiming {
-    /** 280 dp of the 960 dp screen: at 400 dp the logo took the whole screen */
-    val LOGO_WIDTH = 280.dp
+    /** 224 dp of the 960 dp screen: at 400 then 280 dp the logo still took too much of the screen */
+    val LOGO_WIDTH = 224.dp
     const val REVEAL_MILLIS = 900
     const val BLOOM_RISE_MILLIS = 1300
     const val BLOOM_SETTLE_MILLIS = 900
@@ -216,13 +219,19 @@ private object IntroTiming {
     const val SWEEP_MILLIS = 1800
     const val SWEEP_PAUSE_MILLIS = 700L
 
-    /** Shortest intro, so it reads as a moment and not a flash */
-    const val MIN_MILLIS = 2_800L
+    /** Shortest intro, so it reads as a moment and not a flash, and the app has time to warm up behind it */
+    const val MIN_MILLIS = 4_000L
+
+    /**
+     * Once the home is loaded, the logo stays this much longer: the home draws its first frames and decodes its posters
+     * behind it, so the remote moves smoothly from the first press
+     */
+    const val SETTLE_MILLIS = 1_500L
 
     /** Longest wait for the home: past it the app shows anyway */
     const val MAX_MILLIS = 15_000L
     const val PULSE_DEPTH = 0.25f
-    const val FADE_OUT_MILLIS = 450
+    const val FADE_OUT_MILLIS = 600
 }
 
 /** jv_logo_art and jv_logo_shape share the same 960 x 638 crop */

@@ -1163,6 +1163,8 @@
     <string name="shelf_documentaries">Documentaries</string>
     <string name="home_varied_styles">Varied styles</string>
     <string name="home_watchlist">Your list</string>
+    <string name="home_your_directors">Your directors: %1$s</string>
+    <string name="home_your_directors_soon">Your directors</string>
     <string name="tmdb_account">TMDB &amp; IMDb ratings</string>
     <string name="tmdb_account_summary">Your TMDB account ratings and watchlist, including IMDb ratings synced to it</string>
     <string name="tmdb_account_explain">Your ratings and watchlist are read from your TMDB account, including IMDb ratings synced to it (for example by an IMDb → TMDB sync you run). Link that account once: the recommendations use your ratings, rated titles are marked seen, and “Your list” shows your watchlist.</string>
