@@ -112,27 +112,11 @@ private const val CLASSICS_MIN_VOTES_MOVIE = 500
 private const val CLASSICS_MIN_VOTES_TV = 200
 private val CLASSICS_BEFORE: LocalDate = LocalDate.of(1999, 12, 31)
 
-/**
- * Hidden gems: much liked, known enough to be trusted, not the hits everyone has seen. Old enough for the rating to have
- * settled (fresh releases start high), French or English, no cartoons, documentaries or TV films among live-action genres.
- * Best known first: sorting by rating put niche titles with inflated ratings first (Gabriel's Inferno). Older films have
- * the Classics row.
- */
-private const val GEMS_MIN_RATING_MOVIE = 7.2
-private const val GEMS_MIN_VOTES_MOVIE = 1200
-private const val GEMS_MAX_VOTES_MOVIE = 6000
-private const val GEMS_MIN_RATING_TV = 7.5
-private const val GEMS_MIN_VOTES_TV = 300
-private const val GEMS_MAX_VOTES_TV = 2000
-private const val GEMS_SETTLED_MONTHS = 18L
-private val GEMS_LANGUAGES = listOf("fr", "en")
-private val GEMS_SINCE: LocalDate = LocalDate.of(1990, 1, 1)
+/** A genre's "top rated" starts here: older films are its Classics */
+private val TOP_SINCE: LocalDate = LocalDate.of(1990, 1, 1)
 
 /** Animation has its own genre: kept out of the live-action genres (no anime among the dramas) */
 private const val ANIMATION = 16
-private const val FAMILY = 10751
-private const val DOCUMENTARY = 99
-private const val TV_MOVIE = 10770
 
 /** Genres whose pages may show cartoons */
 private val CARTOON_GENRES = setOf(CatalogGenre.ANIMATION, CatalogGenre.CARTOONS, CatalogGenre.FAMILY)
@@ -141,20 +125,28 @@ private val CARTOON_GENRES = setOf(CatalogGenre.ANIMATION, CatalogGenre.CARTOONS
 private fun excludedGenres(genre: CatalogGenre): List<Int> = if (genre in CARTOON_GENRES) emptyList() else listOf(ANIMATION)
 
 /**
+ * Every title of a genre for [type], null when the genre has no equivalent for it: its studios, its keywords (stand-up),
+ * no cartoons in live-action genres
+ */
+fun CatalogGenre.discoverQuery(type: TmdbMediaType): TmdbDiscoverQuery? {
+    val id = (if (type == TmdbMediaType.MOVIE) movieGenreId else tvGenreId) ?: return null
+    return TmdbDiscoverQuery(
+        type,
+        genreId = id,
+        companyIds = companyIds,
+        keywordIds = keywordIds,
+        withoutKeywordIds = withoutKeywordIds,
+        withoutGenreIds = excludedGenres(this),
+    )
+}
+
+/**
  * The query every row of [target] starts from, null if the target has nothing for its type (or is a saga)
  */
 private fun baseQuery(target: BrowseTarget): TmdbDiscoverQuery? =
     when (target) {
         is BrowseTarget.Genre -> {
-            val id = if (target.mediaType == TmdbMediaType.MOVIE) target.genre.movieGenreId else target.genre.tvGenreId
-            id?.let {
-                TmdbDiscoverQuery(
-                    target.mediaType,
-                    genreId = it,
-                    companyIds = target.genre.companyIds,
-                    withoutGenreIds = excludedGenres(target.genre),
-                )
-            }
+            target.genre.discoverQuery(target.mediaType)
         }
 
         is BrowseTarget.Studio -> {
@@ -186,37 +178,11 @@ private fun TmdbDiscoverQuery.popular(mainstream: Boolean = false) =
 /**
  * The full grid under the rows: the popular titles of [target]
  */
-fun gridQuery(target: BrowseTarget): TmdbDiscoverQuery? = baseQuery(target)?.popular(mainstream = target is BrowseTarget.Genre)
-
-/**
- * Hidden gems of a genre page, see [GEMS_MIN_RATING_MOVIE]
- */
-internal fun gemsQuery(
-    base: TmdbDiscoverQuery,
-    genre: CatalogGenre,
-    today: LocalDate,
-): TmdbDiscoverQuery {
-    val movie = base.mediaType == TmdbMediaType.MOVIE
-    val ownGenre = base.genreId
-    val withoutGenres =
-        buildList {
-            addAll(base.withoutGenreIds)
-            add(DOCUMENTARY)
-            add(TV_MOVIE)
-            if (genre !in CARTOON_GENRES) add(FAMILY)
-        }.filter { it != ownGenre }.distinct()
-    return base.copy(
-        sort = TmdbSort.VOTES,
-        minRating = if (movie) GEMS_MIN_RATING_MOVIE else GEMS_MIN_RATING_TV,
-        minVotes = if (movie) GEMS_MIN_VOTES_MOVIE else GEMS_MIN_VOTES_TV,
-        maxVotes = if (movie) GEMS_MAX_VOTES_MOVIE else GEMS_MAX_VOTES_TV,
-        releasedAfter = GEMS_SINCE,
-        releasedBefore = today.minusMonths(GEMS_SETTLED_MONTHS),
-        // Anime are the gems of animation
-        originalLanguages = if (genre in CARTOON_GENRES) GEMS_LANGUAGES + "ja" else GEMS_LANGUAGES,
-        withoutGenreIds = withoutGenres,
-        mainstreamOnly = false,
-    )
+fun gridQuery(target: BrowseTarget): TmdbDiscoverQuery? {
+    val base = baseQuery(target) ?: return null
+    // Stand-up shows collect few votes
+    if (target is BrowseTarget.Genre && target.genre.keywordIds.isNotEmpty()) return base.copy(minVotes = KEYWORD_GENRE_GRID_MIN_VOTES)
+    return base.popular(mainstream = target is BrowseTarget.Genre)
 }
 
 /**
@@ -283,24 +249,26 @@ private fun genreRows(
     base: TmdbDiscoverQuery,
     today: LocalDate,
 ): List<BrowseRowSpec> {
+    if (target.genre.keywordIds.isNotEmpty()) return keywordGenreRows(base, today)
     val movie = target.mediaType == TmdbMediaType.MOVIE
+    val fresh = base.copy(releasedAfter = today.minusYears(1), mainstreamOnly = true)
     val popular = base.popular(mainstream = true)
-    val top = base.copy(sort = TmdbSort.RATING, minVotes = TOP_MIN_VOTES, mainstreamOnly = true)
-    val gems = gemsQuery(base, target.genre, today)
+    // Older films have the Classics row, at the end
+    val top = base.copy(sort = TmdbSort.RATING, minVotes = TOP_MIN_VOTES, releasedAfter = TOP_SINCE, mainstreamOnly = true)
     val classics =
         base.copy(releasedBefore = CLASSICS_BEFORE, minVotes = if (movie) CLASSICS_MIN_VOTES_MOVIE else CLASSICS_MIN_VOTES_TV)
     return buildList {
-        add(row(R.string.discover_popular, popular))
-        add(row(R.string.discover_top_rated, top, exclude = listOf(popular)))
-        add(row(R.string.browse_new, base.copy(releasedAfter = today.minusYears(1), mainstreamOnly = true)))
+        // What is new, what everyone watches, then the kinds of the genre; the best and the oldest last
+        add(row(R.string.browse_new, fresh))
+        add(row(R.string.discover_popular, popular, exclude = listOf(fresh)))
+        genreThemes(target.genre, target.mediaType).forEach { add(row(it.titleRes, it.query)) }
         add(
             BrowseRowSpec(
-                BrowseRowKind.Query(gems, exclude = listOf(popular, top), onePerSaga = true),
-                ResStringProvider(R.string.browse_gems),
+                BrowseRowKind.Query(top, exclude = listOf(fresh, popular), onePerSaga = true),
+                ResStringProvider(R.string.discover_top_rated),
             ),
         )
         add(row(R.string.browse_classics, classics))
-        genreThemes(target.genre, target.mediaType).forEach { add(row(it.titleRes, it.query)) }
         if (movie) {
             relatedStudios(target.genre).forEach { studio ->
                 add(row(StringStringProvider(studio.displayName), base.copy(companyId = studio.companyId).popular()))
@@ -308,6 +276,31 @@ private fun genreRows(
         }
     }
 }
+
+/**
+ * A genre made of keywords (stand-up): shows collect few votes, French ones fewer still
+ */
+private fun keywordGenreRows(
+    base: TmdbDiscoverQuery,
+    today: LocalDate,
+): List<BrowseRowSpec> {
+    val popular = base.copy(minVotes = KEYWORD_GENRE_POPULAR_MIN_VOTES)
+    return listOf(
+        row(R.string.browse_new, base.copy(releasedAfter = today.minusYears(1), minVotes = KEYWORD_GENRE_FEW_VOTES)),
+        row(R.string.discover_popular, popular),
+        row(R.string.theme_french_stand_up, base.copy(originalLanguages = listOf("fr"), minVotes = KEYWORD_GENRE_FEW_VOTES)),
+        row(
+            R.string.discover_top_rated,
+            base.copy(sort = TmdbSort.RATING, minVotes = KEYWORD_GENRE_TOP_MIN_VOTES),
+            exclude = listOf(popular),
+        ),
+    )
+}
+
+private const val KEYWORD_GENRE_FEW_VOTES = 5
+private const val KEYWORD_GENRE_POPULAR_MIN_VOTES = 30
+private const val KEYWORD_GENRE_TOP_MIN_VOTES = 100
+private const val KEYWORD_GENRE_GRID_MIN_VOTES = 20
 
 /**
  * A studio or network: popular, new, then top rated and classics without the titles already shown above

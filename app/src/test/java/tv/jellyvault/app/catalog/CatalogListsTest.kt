@@ -56,7 +56,8 @@ class CatalogListsTest {
     @Test
     fun genre_page_returns_cards_and_total_pages() =
         runTest {
-            coEvery { tmdb.discoverPage(TmdbMediaType.MOVIE, 28, 3) } returns TmdbResultPage(listOf(item(5, TmdbMediaType.MOVIE)), 3, 42)
+            val query = CatalogGenre.ACTION.discoverQuery(TmdbMediaType.MOVIE)!!.copy(minVotes = 200, minRating = 5.0)
+            coEvery { tmdb.discover(query, 3) } returns TmdbResultPage(listOf(item(5, TmdbMediaType.MOVIE)), 3, 42)
             coEvery { index.awaitIndex(any()) } returns emptyMap()
             val (cards, total) = repo.genrePage(CatalogGenre.ACTION, TmdbMediaType.MOVIE, 3)
             assertEquals(1, cards.size)

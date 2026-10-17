@@ -136,8 +136,8 @@ fun StartupIntro(
                     // Glow from the traced outline, tinted: wide violet, tighter lavender, then a thin bright rim.
                     // The artwork's own colours would wash out towards white once blurred
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                        GlowLayer(shape, IntroColors.Violet, 45.dp, 0.55f * pulse)
-                        GlowLayer(shape, IntroColors.Lavender, 14.dp, 0.6f * pulse)
+                        GlowLayer(shape, IntroColors.Violet, 32.dp, 0.55f * pulse)
+                        GlowLayer(shape, IntroColors.Lavender, 10.dp, 0.6f * pulse)
                         GlowLayer(shape, IntroColors.Rim, 3.dp, 0.5f * pulse)
                     }
                     // The artwork keeps its glassy shading; the band of light only lights its pixels (SrcAtop)
@@ -206,7 +206,8 @@ private object IntroColors {
 }
 
 private object IntroTiming {
-    val LOGO_WIDTH = 400.dp
+    /** 280 dp of the 960 dp screen: at 400 dp the logo took the whole screen */
+    val LOGO_WIDTH = 280.dp
     const val REVEAL_MILLIS = 900
     const val BLOOM_RISE_MILLIS = 1300
     const val BLOOM_SETTLE_MILLIS = 900

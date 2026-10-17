@@ -108,38 +108,33 @@ class CatalogRepository
             genre: CatalogGenre,
             mediaType: CatalogMediaType,
         ): List<MediaCard> {
+            suspend fun titles(type: TmdbMediaType) = genreQuery(genre, type)?.let { tmdb.discover(it).items }.orEmpty()
             val items =
                 when (mediaType) {
                     CatalogMediaType.MOVIE -> {
-                        if (genre.companyIds.isNotEmpty()) {
-                            tmdb
-                                .discover(
-                                    TmdbDiscoverQuery(
-                                        TmdbMediaType.MOVIE,
-                                        genreId = genre.movieGenreId,
-                                        companyIds = genre.companyIds,
-                                        minRating = 5.0,
-                                    ),
-                                ).items
-                        } else {
-                            tmdb.discover(TmdbMediaType.MOVIE, genre.movieGenreId)
-                        }
+                        titles(TmdbMediaType.MOVIE)
                     }
 
                     CatalogMediaType.TV -> {
-                        genre.tvGenreId?.let { tmdb.discover(TmdbMediaType.TV, it) }.orEmpty()
+                        titles(TmdbMediaType.TV)
                     }
 
                     CatalogMediaType.BOTH -> {
                         coroutineScope {
-                            val movies = async { tmdb.discover(TmdbMediaType.MOVIE, genre.movieGenreId) }
-                            val series = async { genre.tvGenreId?.let { tmdb.discover(TmdbMediaType.TV, it) }.orEmpty() }
+                            val movies = async { titles(TmdbMediaType.MOVIE) }
+                            val series = async { titles(TmdbMediaType.TV) }
                             interleave(movies.await(), series.await())
                         }
                     }
                 }
             return toCards(items.mainstream())
         }
+
+        /** Popular, well-rated titles of a genre (its studios, keywords, no cartoons in live-action genres) */
+        private fun genreQuery(
+            genre: CatalogGenre,
+            type: TmdbMediaType,
+        ) = genre.discoverQuery(type)?.copy(minVotes = GENRE_MIN_VOTES, minRating = GENRE_MIN_RATING)
 
         /**
          * Convert TMDB titles to cards, marking the ones already in the library
@@ -276,9 +271,8 @@ class CatalogRepository
             mediaType: TmdbMediaType,
             page: Int,
         ): Pair<List<MediaCard>, Int> {
-            val genreId = if (mediaType == TmdbMediaType.MOVIE) genre.movieGenreId else genre.tvGenreId
-            if (genreId == null) return emptyList<MediaCard>() to 0
-            val result = tmdb.discoverPage(mediaType, genreId, page)
+            val query = genreQuery(genre, mediaType) ?: return emptyList<MediaCard>() to 0
+            val result = tmdb.discover(query, page)
             return toCards(result.items) to result.totalPages
         }
 
@@ -339,6 +333,9 @@ internal fun sagaKey(title: String): String {
         key = shorter
     }
 }
+
+private const val GENRE_MIN_VOTES = 200
+private const val GENRE_MIN_RATING = 5.0
 
 /** A row that only repeats the rows above it, but for a few titles, is not shown */
 internal const val MIN_DISTINCT_TITLES = 8

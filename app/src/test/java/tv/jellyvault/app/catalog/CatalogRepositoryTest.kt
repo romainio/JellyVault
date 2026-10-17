@@ -16,9 +16,17 @@ import tv.jellyvault.app.catalog.library.TmdbKey
 import tv.jellyvault.app.catalog.tmdb.TmdbClient
 import tv.jellyvault.app.catalog.tmdb.TmdbItem
 import tv.jellyvault.app.catalog.tmdb.TmdbMediaType
+import tv.jellyvault.app.catalog.tmdb.TmdbResultPage
 import java.util.UUID
 
 class CatalogRepositoryTest {
+    private fun genreQuery(
+        genre: CatalogGenre,
+        type: TmdbMediaType,
+    ) = genre.discoverQuery(type)!!.copy(minVotes = 200, minRating = 5.0)
+
+    private fun page(items: List<TmdbItem>) = TmdbResultPage(items, 1, 1)
+
     private val tmdb = mockk<TmdbClient>()
     private val index = mockk<LibraryIndex>()
     private val source = mockk<LibraryItemSource>()
@@ -75,8 +83,10 @@ class CatalogRepositoryTest {
     fun same_numeric_id_for_movie_and_tv_are_distinct() =
         runTest {
             val showId = UUID.randomUUID()
-            coEvery { tmdb.discover(TmdbMediaType.MOVIE, 28) } returns listOf(item(100, TmdbMediaType.MOVIE))
-            coEvery { tmdb.discover(TmdbMediaType.TV, 10759) } returns listOf(item(100, TmdbMediaType.TV))
+            coEvery { tmdb.discover(genreQuery(CatalogGenre.ACTION, TmdbMediaType.MOVIE), 1) } returns
+                page(listOf(item(100, TmdbMediaType.MOVIE)))
+            coEvery { tmdb.discover(genreQuery(CatalogGenre.ACTION, TmdbMediaType.TV), 1) } returns
+                page(listOf(item(100, TmdbMediaType.TV)))
             coEvery { index.awaitIndex(any()) } returns mapOf(TmdbKey(TmdbMediaType.TV, 100) to showId)
             coEvery { source.fetchItems(listOf(showId)) } returns listOf(BaseItemDto(id = showId, type = BaseItemKind.SERIES))
 
@@ -90,14 +100,16 @@ class CatalogRepositoryTest {
     @Test
     fun both_interleaves_movies_and_series_and_dedupes() =
         runTest {
-            coEvery { tmdb.discover(TmdbMediaType.MOVIE, 35) } returns
-                listOf(
-                    item(1, TmdbMediaType.MOVIE),
-                    item(2, TmdbMediaType.MOVIE),
-                    item(1, TmdbMediaType.MOVIE),
-                    item(3, TmdbMediaType.MOVIE),
+            coEvery { tmdb.discover(genreQuery(CatalogGenre.COMEDY, TmdbMediaType.MOVIE), 1) } returns
+                page(
+                    listOf(
+                        item(1, TmdbMediaType.MOVIE),
+                        item(2, TmdbMediaType.MOVIE),
+                        item(1, TmdbMediaType.MOVIE),
+                        item(3, TmdbMediaType.MOVIE),
+                    ),
                 )
-            coEvery { tmdb.discover(TmdbMediaType.TV, 35) } returns listOf(item(9, TmdbMediaType.TV))
+            coEvery { tmdb.discover(genreQuery(CatalogGenre.COMEDY, TmdbMediaType.TV), 1) } returns page(listOf(item(9, TmdbMediaType.TV)))
             coEvery { index.awaitIndex(any()) } returns emptyMap()
 
             val keys = repo.genreRow(CatalogGenre.COMEDY, CatalogMediaType.BOTH).map { it.tmdb!!.key }
@@ -117,7 +129,8 @@ class CatalogRepositoryTest {
     @Test
     fun genre_without_tv_equivalent_uses_movies_only() =
         runTest {
-            coEvery { tmdb.discover(TmdbMediaType.MOVIE, 27) } returns listOf(item(5, TmdbMediaType.MOVIE))
+            coEvery { tmdb.discover(genreQuery(CatalogGenre.HORROR, TmdbMediaType.MOVIE), 1) } returns
+                page(listOf(item(5, TmdbMediaType.MOVIE)))
             coEvery { index.awaitIndex(any()) } returns emptyMap()
 
             assertEquals(1, repo.genreRow(CatalogGenre.HORROR, CatalogMediaType.BOTH).size)

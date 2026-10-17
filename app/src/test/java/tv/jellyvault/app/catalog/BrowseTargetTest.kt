@@ -17,22 +17,24 @@ class BrowseTargetTest {
     private fun kinds(target: BrowseTarget) = browseRows(target, today).map { it.kind }
 
     @Test
-    fun genre_page_rows_then_related_studios() {
+    fun genre_page_is_new_popular_themes_then_top_rated_classics_and_studios() {
         val rows = queries(BrowseTarget.Genre(CatalogGenre.ANIMATION, TmdbMediaType.MOVIE))
-        assertEquals(9, rows.size)
+        val themes = genreThemes(CatalogGenre.ANIMATION, TmdbMediaType.MOVIE).map { it.query }
+        assertEquals(4 + themes.size + 3, rows.size)
         assertTrue(rows.all { it.genreId == 16 && it.mediaType == TmdbMediaType.MOVIE })
-        val (popular, top, fresh, gems, classics) = rows
+        val (fresh, popular) = rows
+        assertEquals(LocalDate.of(2025, 9, 27), fresh.releasedAfter)
         assertEquals(TmdbDiscoverQuery(TmdbMediaType.MOVIE, genreId = 16, minVotes = 200, minRating = 5.0, mainstreamOnly = true), popular)
-        assertTrue(fresh.mainstreamOnly && top.mainstreamOnly)
-        assertTrue(!gems.mainstreamOnly && !classics.mainstreamOnly)
+        assertEquals(themes, rows.subList(2, 2 + themes.size))
+        val (top, classics) = rows.drop(2 + themes.size)
         assertEquals(TmdbSort.RATING, top.sort)
         assertEquals(1000, top.minVotes)
-        assertEquals(LocalDate.of(2025, 9, 27), fresh.releasedAfter)
+        // Older films are the Classics: no Chaplin among the top rated comedies
+        assertEquals(LocalDate.of(1990, 1, 1), top.releasedAfter)
         assertEquals(LocalDate.of(1999, 12, 31), classics.releasedBefore)
         assertEquals(500, classics.minVotes)
         assertEquals(listOf(3, 10342, 521), rows.takeLast(3).map { it.companyId })
-        // Animation keeps anime among its gems
-        assertEquals(listOf("fr", "en", "ja"), gems.originalLanguages)
+        assertTrue(rows.none { it.maxVotes != null })
     }
 
     @Test
@@ -44,39 +46,33 @@ class BrowseTargetTest {
     }
 
     @Test
-    fun gems_are_settled_well_known_french_or_english_live_action_films() {
-        val gems = queries(BrowseTarget.Genre(CatalogGenre.DRAMA, TmdbMediaType.MOVIE))[3]
-        // Best known first: sorting by rating put niche titles with inflated ratings first
-        assertEquals(TmdbSort.VOTES, gems.sort)
-        assertEquals(LocalDate.of(1990, 1, 1), gems.releasedAfter)
-        assertEquals(7.2, gems.minRating)
-        assertEquals(1200, gems.minVotes)
-        assertEquals(6000, gems.maxVotes)
-        assertEquals(listOf("fr", "en"), gems.originalLanguages)
-        assertEquals(LocalDate.of(2025, 3, 27), gems.releasedBefore)
-        assertEquals(setOf(16, 99, 10770, 10751), gems.withoutGenreIds.toSet())
-        // A documentary page keeps documentaries
-        val docs = queries(BrowseTarget.Genre(CatalogGenre.DOCUMENTARY, TmdbMediaType.MOVIE))[3]
-        assertTrue(99 !in docs.withoutGenreIds)
+    fun stand_up_is_its_own_genre_and_comedy_leaves_it_out() {
+        val standUp = queries(BrowseTarget.Genre(CatalogGenre.STAND_UP, TmdbMediaType.MOVIE))
+        assertTrue(standUp.all { it.keywordIds == listOf(9716, 376694) && it.genreId == 35 })
+        assertTrue(standUp.any { it.originalLanguages == listOf("fr") })
+        assertEquals(20, gridQuery(BrowseTarget.Genre(CatalogGenre.STAND_UP, TmdbMediaType.MOVIE))!!.minVotes)
+        assertTrue(browseRows(BrowseTarget.Genre(CatalogGenre.STAND_UP, TmdbMediaType.TV), today).isEmpty())
+        val comedy = queries(BrowseTarget.Genre(CatalogGenre.COMEDY, TmdbMediaType.MOVIE))
+        assertTrue(comedy.all { it.withoutKeywordIds == listOf(9716, 376694) })
     }
 
     @Test
-    fun rows_below_popular_leave_out_the_titles_already_shown() {
+    fun rows_below_leave_out_the_titles_already_shown() {
         val rows = browseRows(BrowseTarget.Genre(CatalogGenre.COMEDY, TmdbMediaType.MOVIE), today).map { it.kind as BrowseRowKind.Query }
-        val (popular, top, _, gems) = rows
-        assertTrue(popular.exclude.isEmpty())
-        assertEquals(listOf(popular.query), top.exclude)
-        assertEquals(listOf(popular.query, top.query), gems.exclude)
-        assertTrue(gems.onePerSaga && !top.onePerSaga)
+        val (fresh, popular) = rows
+        val top = rows.single { it.query.sort == TmdbSort.RATING && it.query.keywordIds.isEmpty() && it.query.andGenreIds.isEmpty() }
+        assertTrue(fresh.exclude.isEmpty())
+        assertEquals(listOf(fresh.query), popular.exclude)
+        assertEquals(listOf(fresh.query, popular.query), top.exclude)
+        assertTrue(top.onePerSaga && !popular.onePerSaga)
     }
 
     @Test
     fun series_genre_uses_the_series_genre_id_and_has_no_studio_rows() {
         val rows = queries(BrowseTarget.Genre(CatalogGenre.ACTION, TmdbMediaType.TV))
-        assertEquals(5, rows.size)
+        assertEquals(4 + genreThemes(CatalogGenre.ACTION, TmdbMediaType.TV).size, rows.size)
         assertTrue(rows.all { it.genreId == 10759 })
-        assertEquals(200, rows[4].minVotes)
-        assertEquals(300, rows[3].minVotes)
+        assertEquals(200, rows.last().minVotes)
     }
 
     @Test
@@ -150,7 +146,7 @@ class BrowseTargetTest {
     fun new_titles_need_fewer_votes_for_studios_and_networks() {
         assertEquals(50, queries(BrowseTarget.Studio(CatalogStudio.A24))[1].minVotes)
         assertEquals(50, queries(BrowseTarget.Network(CatalogNetwork.ARTE))[1].minVotes)
-        assertEquals(200, queries(BrowseTarget.Genre(CatalogGenre.DRAMA, TmdbMediaType.MOVIE))[2].minVotes)
+        assertEquals(200, queries(BrowseTarget.Genre(CatalogGenre.DRAMA, TmdbMediaType.MOVIE))[0].minVotes)
     }
 
     @Test
@@ -168,7 +164,7 @@ class BrowseTargetTest {
     @Test
     fun cartoons_are_animation_from_animation_studios() {
         val rows = queries(BrowseTarget.Genre(CatalogGenre.CARTOONS, TmdbMediaType.MOVIE))
-        assertEquals(5, rows.size)
+        assertEquals(4, rows.size)
         assertTrue(rows.all { it.genreId == 16 && it.companyIds.containsAll(listOf(6125, 3, 10342)) })
         assertTrue(browseRows(BrowseTarget.Genre(CatalogGenre.CARTOONS, TmdbMediaType.TV), today).isEmpty())
     }

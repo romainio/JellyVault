@@ -31,8 +31,34 @@ private object Keyword {
     const val SATIRE = 8201
     const val BLACK_COMEDY = 383021
     const val BUDDY_COMEDY = 167541
-    const val STAND_UP = 9716
-    const val STAND_UP_SPECIAL = 376694
+    const val MARTIAL_ARTS = 779
+    const val SURVIVAL = 10349
+    const val ROAD_MOVIE = 167043
+    const val PARODY = 9755
+    const val HIGH_SCHOOL = 6270
+    const val CHRISTMAS = 207317
+    const val CONSPIRACY = 10410
+    const val KIDNAPPING = 1930
+    const val SPACE = 9882
+    const val ARTIFICIAL_INTELLIGENCE = 310
+    const val ALIEN = 9951
+    const val POST_APOCALYPTIC = 4458
+    const val COURTROOM = 33519
+    const val SPORTS = 6075
+    const val FAMILY_RELATIONSHIPS = 10235
+    const val SLASHER = 12339
+    const val HAUNTED_HOUSE = 3358
+    const val ZOMBIE = 12377
+    const val FOUND_FOOTAGE = 163053
+    const val MAFIA = 10391
+    const val PRISON = 378
+    const val DETECTIVE = 703
+    const val WORLD_WAR_II = 1956
+    const val MAGIC = 2343
+    const val DRAGON = 12554
+    const val MUSICAL = 4344
+    const val WEDDING = 13027
+    const val REVENGE = 9748
 }
 
 private const val ROMANCE = 10749
@@ -41,6 +67,8 @@ private const val CRIME = 80
 private const val FAMILY = 10751
 private const val HISTORY = 36
 private const val DRAMA = 18
+private const val ACTION = 28
+private const val FANTASY = 14
 private const val ANIMATION = 16
 
 /** Keyword rows of live-action genres match cartoons too (Cars 2 is a spy film): kept out */
@@ -48,7 +76,7 @@ private val NO_CARTOONS = listOf(ANIMATION, FAMILY)
 
 private const val THEME_MIN_VOTES_MOVIE = 300
 private const val THEME_MIN_VOTES_TV = 100
-private const val STAND_UP_MIN_VOTES = 50
+private const val DOCUMENTARY_MIN_VOTES = 50
 
 private fun minVotes(type: TmdbMediaType) = if (type == TmdbMediaType.MOVIE) THEME_MIN_VOTES_MOVIE else THEME_MIN_VOTES_TV
 
@@ -61,6 +89,7 @@ private fun theme(
     originCountry: String? = null,
     minVotes: Int = minVotes(type),
     withoutGenreIds: List<Int> = emptyList(),
+    withoutKeywordIds: List<Int> = emptyList(),
 ) = ThemeRow(
     title,
     TmdbDiscoverQuery(
@@ -73,6 +102,7 @@ private fun theme(
         mainstreamOnly = true,
         // A row about one genre ("family comedies") keeps it
         withoutGenreIds = withoutGenreIds - andGenreIds.toSet(),
+        withoutKeywordIds = withoutKeywordIds,
     ),
 )
 
@@ -84,7 +114,7 @@ fun genreThemes(
     genre: CatalogGenre,
     type: TmdbMediaType,
 ): List<ThemeRow> {
-    if (genre.companyIds.isNotEmpty()) return emptyList()
+    if (genre.companyIds.isNotEmpty() || genre.keywordIds.isNotEmpty()) return emptyList()
     val id = (if (type == TmdbMediaType.MOVIE) genre.movieGenreId else genre.tvGenreId) ?: return emptyList()
     val movie = type == TmdbMediaType.MOVIE
     val without = if (genre == CatalogGenre.ANIMATION || genre == CatalogGenre.FAMILY) emptyList() else NO_CARTOONS
@@ -93,16 +123,27 @@ fun genreThemes(
         title: Int,
         vararg keywords: Int,
         votes: Int = minVotes(type),
-    ) = theme(title, type, id, keywordIds = keywords.toList(), minVotes = votes, withoutGenreIds = without)
+    ) = theme(
+        title,
+        type,
+        id,
+        keywordIds = keywords.toList(),
+        minVotes = votes,
+        withoutGenreIds = without,
+        withoutKeywordIds = genre.withoutKeywordIds,
+    )
 
     fun with(
         title: Int,
         vararg genres: Int,
-    ) = theme(title, type, id, andGenreIds = genres.toList(), withoutGenreIds = without)
+    ) = theme(title, type, id, andGenreIds = genres.toList(), withoutGenreIds = without, withoutKeywordIds = genre.withoutKeywordIds)
 
-    fun country(title: Int) = theme(title, type, id, originCountry = "FR", withoutGenreIds = without)
+    fun country(title: Int) =
+        theme(title, type, id, originCountry = "FR", withoutGenreIds = without, withoutKeywordIds = genre.withoutKeywordIds)
     val trueStory = kw(R.string.theme_true_story, Keyword.TRUE_STORY)
     val serialKiller = kw(R.string.theme_serial_killer, Keyword.SERIAL_KILLER)
+    val biopic = kw(R.string.theme_biopic, Keyword.BIOGRAPHY)
+    val detective = kw(R.string.theme_detective, Keyword.DETECTIVE)
     return when (genre) {
         CatalogGenre.ACTION -> {
             if (movie) {
@@ -110,24 +151,38 @@ fun genreThemes(
                     kw(R.string.theme_heist, Keyword.HEIST),
                     kw(R.string.theme_spy, Keyword.SPY),
                     kw(R.string.theme_superhero, Keyword.SUPERHERO),
+                    kw(R.string.theme_martial_arts, Keyword.MARTIAL_ARTS),
+                    with(R.string.theme_action_comedy, COMEDY),
+                    kw(R.string.theme_revenge, Keyword.REVENGE),
                 )
             } else {
-                emptyList()
+                listOf(kw(R.string.theme_superhero, Keyword.SUPERHERO), kw(R.string.theme_spy, Keyword.SPY))
             }
+        }
+
+        CatalogGenre.ADVENTURE -> {
+            listOf(
+                kw(R.string.theme_survival, Keyword.SURVIVAL),
+                with(R.string.theme_fantasy_adventure, FANTASY),
+                kw(R.string.theme_road_movie, Keyword.ROAD_MOVIE),
+                trueStory,
+            )
         }
 
         CatalogGenre.COMEDY -> {
             if (movie) {
                 listOf(
-                    with(R.string.theme_romcom, ROMANCE),
                     country(R.string.theme_french_comedy),
-                    kw(R.string.theme_dark_comedy, Keyword.SATIRE, Keyword.BLACK_COMEDY),
+                    with(R.string.theme_romcom, ROMANCE),
+                    with(R.string.theme_action_comedy, ACTION),
                     kw(R.string.theme_buddy, Keyword.BUDDY_COMEDY),
-                    kw(R.string.theme_stand_up, Keyword.STAND_UP, Keyword.STAND_UP_SPECIAL, votes = STAND_UP_MIN_VOTES),
+                    kw(R.string.theme_dark_comedy, Keyword.SATIRE, Keyword.BLACK_COMEDY),
+                    kw(R.string.theme_parody, Keyword.PARODY),
+                    kw(R.string.theme_teen_comedy, Keyword.HIGH_SCHOOL),
                     with(R.string.theme_family_comedy, FAMILY),
                 )
             } else {
-                listOf(country(R.string.theme_french_comedy))
+                listOf(country(R.string.theme_french_comedy), kw(R.string.theme_teen_comedy, Keyword.HIGH_SCHOOL))
             }
         }
 
@@ -137,60 +192,129 @@ fun genreThemes(
                     kw(R.string.theme_psychological, Keyword.PSYCHOLOGICAL_THRILLER),
                     serialKiller,
                     with(R.string.theme_crime_thriller, CRIME),
+                    kw(R.string.theme_conspiracy, Keyword.CONSPIRACY),
+                    kw(R.string.theme_kidnapping, Keyword.KIDNAPPING),
+                    kw(R.string.theme_spy, Keyword.SPY),
                 )
             } else {
-                listOf(trueStory)
+                listOf(trueStory, serialKiller, detective)
             }
         }
 
+        CatalogGenre.MYSTERY -> {
+            listOf(detective, serialKiller, kw(R.string.theme_conspiracy, Keyword.CONSPIRACY))
+        }
+
         CatalogGenre.SCIENCE_FICTION -> {
-            listOf(kw(R.string.theme_time_travel, Keyword.TIME_TRAVEL), kw(R.string.theme_dystopia, Keyword.DYSTOPIA))
+            listOf(
+                kw(R.string.theme_space, Keyword.SPACE),
+                kw(R.string.theme_time_travel, Keyword.TIME_TRAVEL),
+                kw(R.string.theme_dystopia, Keyword.DYSTOPIA),
+                kw(R.string.theme_aliens, Keyword.ALIEN),
+                kw(R.string.theme_ai, Keyword.ARTIFICIAL_INTELLIGENCE),
+                kw(R.string.theme_post_apocalyptic, Keyword.POST_APOCALYPTIC),
+            )
         }
 
         CatalogGenre.ANIMATION -> {
-            if (movie) listOf(kw(R.string.theme_buddy, Keyword.BUDDY_COMEDY)) else emptyList()
+            if (movie) {
+                listOf(
+                    kw(R.string.theme_buddy, Keyword.BUDDY_COMEDY),
+                    kw(R.string.theme_christmas, Keyword.CHRISTMAS),
+                )
+            } else {
+                emptyList()
+            }
         }
 
         CatalogGenre.DRAMA -> {
             if (movie) {
                 listOf(
                     trueStory,
-                    kw(R.string.theme_biopic, Keyword.BIOGRAPHY),
-                    kw(R.string.theme_coming_of_age, Keyword.COMING_OF_AGE),
+                    biopic,
+                    kw(R.string.theme_family_drama, Keyword.FAMILY_RELATIONSHIPS),
                     with(R.string.theme_romantic_drama, ROMANCE),
+                    kw(R.string.theme_coming_of_age, Keyword.COMING_OF_AGE),
+                    kw(R.string.theme_courtroom, Keyword.COURTROOM),
+                    kw(R.string.theme_sports, Keyword.SPORTS),
                     with(R.string.theme_historical, HISTORY),
                 )
             } else {
-                listOf(trueStory, country(R.string.theme_french_drama))
+                listOf(trueStory, country(R.string.theme_french_drama), kw(R.string.theme_courtroom, Keyword.COURTROOM))
             }
         }
 
         CatalogGenre.DOCUMENTARY -> {
-            listOf(kw(R.string.theme_biopic, Keyword.BIOGRAPHY))
+            // Documentaries collect few votes
+            listOf(
+                kw(R.string.theme_biopic, Keyword.BIOGRAPHY, votes = DOCUMENTARY_MIN_VOTES),
+                kw(R.string.theme_sports, Keyword.SPORTS, votes = DOCUMENTARY_MIN_VOTES),
+                kw(R.string.theme_space, Keyword.SPACE, votes = DOCUMENTARY_MIN_VOTES),
+            )
         }
 
         CatalogGenre.HORROR -> {
-            listOf(kw(R.string.theme_psychological, Keyword.PSYCHOLOGICAL_THRILLER), serialKiller)
+            listOf(
+                kw(R.string.theme_psychological, Keyword.PSYCHOLOGICAL_THRILLER),
+                kw(R.string.theme_haunted_house, Keyword.HAUNTED_HOUSE),
+                kw(R.string.theme_slasher, Keyword.SLASHER),
+                kw(R.string.theme_zombies, Keyword.ZOMBIE),
+                kw(R.string.theme_found_footage, Keyword.FOUND_FOOTAGE),
+                serialKiller,
+            )
         }
 
         CatalogGenre.ROMANCE -> {
             listOf(
                 with(R.string.theme_romcom, COMEDY),
-                kw(R.string.theme_coming_of_age, Keyword.COMING_OF_AGE),
                 with(R.string.theme_romantic_drama, DRAMA),
+                kw(R.string.theme_coming_of_age, Keyword.COMING_OF_AGE),
+                kw(R.string.theme_weddings, Keyword.WEDDING),
+                kw(R.string.theme_christmas, Keyword.CHRISTMAS),
             )
         }
 
         CatalogGenre.CRIME -> {
-            if (movie) listOf(kw(R.string.theme_heist, Keyword.HEIST), serialKiller, trueStory) else listOf(trueStory, serialKiller)
+            if (movie) {
+                listOf(
+                    kw(R.string.theme_heist, Keyword.HEIST),
+                    kw(R.string.theme_mafia, Keyword.MAFIA),
+                    serialKiller,
+                    detective,
+                    kw(R.string.theme_prison, Keyword.PRISON),
+                    trueStory,
+                )
+            } else {
+                listOf(trueStory, serialKiller, kw(R.string.theme_mafia, Keyword.MAFIA), detective)
+            }
         }
 
         CatalogGenre.FAMILY -> {
-            listOf(kw(R.string.theme_buddy, Keyword.BUDDY_COMEDY), kw(R.string.theme_coming_of_age, Keyword.COMING_OF_AGE))
+            listOf(
+                kw(R.string.theme_christmas, Keyword.CHRISTMAS),
+                kw(R.string.theme_buddy, Keyword.BUDDY_COMEDY),
+                kw(R.string.theme_coming_of_age, Keyword.COMING_OF_AGE),
+            )
+        }
+
+        CatalogGenre.FANTASY -> {
+            listOf(kw(R.string.theme_magic, Keyword.MAGIC), kw(R.string.theme_dragons, Keyword.DRAGON))
+        }
+
+        CatalogGenre.HISTORY -> {
+            listOf(biopic, kw(R.string.theme_ww2, Keyword.WORLD_WAR_II), with(R.string.theme_historical, DRAMA))
         }
 
         CatalogGenre.WAR -> {
-            listOf(trueStory)
+            listOf(trueStory, kw(R.string.theme_ww2, Keyword.WORLD_WAR_II))
+        }
+
+        CatalogGenre.MUSIC -> {
+            listOf(kw(R.string.theme_musicals, Keyword.MUSICAL), biopic)
+        }
+
+        CatalogGenre.WESTERN -> {
+            listOf(kw(R.string.theme_revenge, Keyword.REVENGE))
         }
 
         else -> {

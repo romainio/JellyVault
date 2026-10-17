@@ -9,8 +9,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import timber.log.Timber
 import tv.jellyvault.app.catalog.CatalogGenre
+import tv.jellyvault.app.catalog.discoverQuery
 import tv.jellyvault.app.catalog.tmdb.TmdbClient
-import tv.jellyvault.app.catalog.tmdb.TmdbDiscoverQuery
 import tv.jellyvault.app.catalog.tmdb.TmdbItem
 import tv.jellyvault.app.catalog.tmdb.TmdbMediaType
 import tv.jellyvault.app.ui.launchIO
@@ -21,7 +21,7 @@ private const val CARD_BACKDROP_SIZE = "w780"
 
 /** Only titles everyone knows: the picture should say the genre at a glance */
 private const val PICTURE_MIN_VOTES = 1000
-private const val ANIMATION = 16
+private const val STAND_UP_PICTURE_MIN_VOTES = 30
 
 /**
  * Pictures of the Genres tab: the backdrop of a famous title of each genre, never the same title twice
@@ -70,16 +70,17 @@ class GenreImagesViewModel
             genre: CatalogGenre,
             mediaType: TmdbMediaType,
         ): List<TmdbItem> {
-            val genreId = (if (mediaType == TmdbMediaType.MOVIE) genre.movieGenreId else genre.tvGenreId) ?: return emptyList()
-            val cartoons = genreId == ANIMATION || genre == CatalogGenre.FAMILY
-            val query =
-                TmdbDiscoverQuery(
-                    mediaType,
-                    genreId = genreId,
-                    companyIds = genre.companyIds,
-                    minVotes = if (mediaType == TmdbMediaType.MOVIE) PICTURE_MIN_VOTES else PICTURE_MIN_VOTES / 3,
-                    withoutGenreIds = if (cartoons) emptyList() else listOf(ANIMATION),
-                )
-            return tmdb.discover(query).items
+            // The genre's own titles (its keywords for stand-up, no cartoons in live-action genres), famous ones only
+            val base = genre.discoverQuery(mediaType) ?: return emptyList()
+            val votes =
+                when {
+                    // Stand-up shows collect few votes
+                    genre.keywordIds.isNotEmpty() -> STAND_UP_PICTURE_MIN_VOTES
+
+                    mediaType == TmdbMediaType.MOVIE -> PICTURE_MIN_VOTES
+
+                    else -> PICTURE_MIN_VOTES / 3
+                }
+            return tmdb.discover(base.copy(minVotes = votes)).items
         }
     }

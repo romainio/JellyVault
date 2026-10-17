@@ -37,11 +37,12 @@ class GenreThemesTest {
     }
 
     @Test
-    fun comedy_has_romcom_french_and_stand_up_rows() {
+    fun comedy_has_romcom_and_french_rows_but_no_stand_up() {
         val rows = queries(CatalogGenre.COMEDY, TmdbMediaType.MOVIE)
         assertTrue(rows.any { it.andGenreIds == listOf(10749) })
         assertTrue(rows.any { it.originCountry == "FR" })
-        assertTrue(rows.any { 9716 in it.keywordIds })
+        assertTrue(rows.none { 9716 in it.keywordIds })
+        assertTrue(rows.all { it.withoutKeywordIds == listOf(9716, 376694) })
         assertTrue(rows.all { it.genreId == 35 && it.mediaType == TmdbMediaType.MOVIE })
     }
 
@@ -69,12 +70,12 @@ class GenreThemesTest {
     }
 
     @Test
-    fun genre_page_shows_themes_before_studios() {
+    fun genre_page_shows_themes_after_new_and_popular() {
         val rows = browseRows(BrowseTarget.Genre(CatalogGenre.COMEDY, TmdbMediaType.MOVIE), java.time.LocalDate.of(2026, 9, 27))
         val themeCount = genreThemes(CatalogGenre.COMEDY, TmdbMediaType.MOVIE).size
         assertTrue(themeCount > 0)
         val queries = rows.map { (it.kind as BrowseRowKind.Query).query }
-        assertEquals(genreThemes(CatalogGenre.COMEDY, TmdbMediaType.MOVIE).map { it.query }, queries.subList(5, 5 + themeCount))
+        assertEquals(genreThemes(CatalogGenre.COMEDY, TmdbMediaType.MOVIE).map { it.query }, queries.subList(2, 2 + themeCount))
     }
 
     @Test
