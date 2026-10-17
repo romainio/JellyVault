@@ -9,8 +9,9 @@
 - [5. Einen Film oder eine Serie anfragen](#5-einen-film-oder-eine-serie-anfragen)
 - [6. TMDB-Konto verknüpfen (Bewertungen und Merkliste)](#6-tmdb-konto-verknüpfen-bewertungen-und-merkliste)
 - [7. Sprache](#7-sprache)
-- [8. Updates](#8-updates)
-- [9. Fehlerbehebung](#9-fehlerbehebung)
+- [8. Katalog-Einstellungen](#8-katalog-einstellungen)
+- [9. Updates](#9-updates)
+- [10. Fehlerbehebung](#10-fehlerbehebung)
 
 ## 1. Installation
 
@@ -98,13 +99,21 @@ Die Verknüpfung deines TMDB-Kontos verbessert die Empfehlungen:
 - Die Beschreibungen der Titel, die du besitzt, stammen von deinem Jellyfin-Server, und zwar in der *Preferred metadata language* (bevorzugte Metadatensprache) der jeweiligen Bibliothek. Ändere sie auf dem Server und aktualisiere die Metadaten der Bibliothek, um die Beschreibungen in einer anderen Sprache zu erhalten.
 - Das Entdecken verwendet Frankreich als Region: Trendlisten, Altersfreigaben und die französischen Regale.
 
-## 8. Updates
+## 8. Katalog-Einstellungen
+
+*Einstellungen › Erweiterte Einstellungen › Catalog* legt fest, was die TMDB-Reihen vorschlagen (diese Optionen erscheinen auf Englisch):
+
+- *Oldest titles suggested*: keine Vorschläge, die vor dem gewählten Jahr erschienen sind (1970 bis 2010). Suche und Filmreihen zeigen weiterhin alle Titel.
+- *How well known*: *Balanced*, *Discovery: lesser known titles too* (auch weniger bekannte Titel) oder *Big hits only*.
+- *Show « Continue watching »* und *Show « Recently added »* blenden diese Reihen auf der Startseite, den Seiten Movies und Series und in den Mediatheken aus.
+
+## 9. Updates
 
 Die APK von der Releases-Seite prüft beim Start auf GitHub, ob es neue Versionen gibt, und zeigt *Update available* an, wenn eine vorhanden ist. Der Bereich *Über diese App* in den *Einstellungen* zeigt ebenfalls, ob ein Update verfügbar ist. Die automatische Prüfung kannst du unter *Einstellungen › Erweiterte Einstellungen › Automatisch auf Aktualisierungen prüfen* ausschalten.
 
 Wenn du eine neue Version über die alte installierst, bleiben deine Einstellungen erhalten, solange beide mit demselben Schlüssel signiert sind. Ein selbst erstellter Build (mit deinem eigenen Schlüssel signiert) lässt sich nicht mit der APK von der Releases-Seite aktualisieren: Deinstalliere ihn zuerst, was die Einstellungen der App löscht.
 
-## 9. Fehlerbehebung
+## 10. Fehlerbehebung
 
 **Keine Entdecken-Reihen, oder "TMDB not configured: add your key in Settings › TMDB & IMDb ratings"**
 Füge einen TMDB-Schlüssel hinzu ([Schritt 3](#3-tmdb-schlüssel-hinzufügen)) und starte die App neu.

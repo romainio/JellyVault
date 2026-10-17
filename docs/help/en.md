@@ -9,8 +9,9 @@
 - [5. Request a movie or a series](#5-request-a-movie-or-a-series)
 - [6. Link your TMDB account (ratings and watchlist)](#6-link-your-tmdb-account-ratings-and-watchlist)
 - [7. Language](#7-language)
-- [8. Updates](#8-updates)
-- [9. Troubleshooting](#9-troubleshooting)
+- [8. Catalog settings](#8-catalog-settings)
+- [9. Updates](#9-updates)
+- [10. Troubleshooting](#10-troubleshooting)
 
 ## 1. Install
 
@@ -98,13 +99,21 @@ Open *Settings › TMDB & IMDb ratings › Link my TMDB account*, scan the code 
 - The descriptions of the titles you own come from your Jellyfin server, in the *Preferred metadata language* of each library. Change it on the server and refresh the library metadata to get them in another language.
 - Discovery uses France as its region: trending lists, age ratings and the French shelves.
 
-## 8. Updates
+## 8. Catalog settings
+
+*Settings › Advanced Settings › Catalog* tunes what the TMDB rows suggest:
+
+- *Oldest titles suggested*: no suggestion released before the year you pick (1970 to 2010). Search and sagas still show every title.
+- *How well known*: *Balanced*, *Discovery: lesser known titles too* or *Big hits only*.
+- *Show « Continue watching »* and *Show « Recently added »* hide those rows on the home, the Movies and Series pages and the libraries.
+
+## 9. Updates
 
 The APK from the Releases page checks GitHub for new versions when it starts and shows *Update available* when there is one. The *About* section of *Settings* also shows whether an update is available. You can turn the automatic check off in *Settings › Advanced Settings › Automatically check for updates*.
 
 Installing a new version over the old one keeps your settings, as long as both are signed with the same key. A build you made yourself (signed with your own key) can't be updated by the Releases APK: uninstall it first, which deletes the app's settings.
 
-## 9. Troubleshooting
+## 10. Troubleshooting
 
 **No discovery rows, or "TMDB not configured: add your key in Settings › TMDB & IMDb ratings"**
 Add a TMDB key ([step 3](#3-add-your-tmdb-key)), then restart the app.

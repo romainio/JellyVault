@@ -9,8 +9,9 @@
 - [5. Solicita una película o una serie](#5-solicita-una-película-o-una-serie)
 - [6. Vincula tu cuenta de TMDB (valoraciones y lista de seguimiento)](#6-vincula-tu-cuenta-de-tmdb-valoraciones-y-lista-de-seguimiento)
 - [7. Idioma](#7-idioma)
-- [8. Actualizaciones](#8-actualizaciones)
-- [9. Solución de problemas](#9-solución-de-problemas)
+- [8. Ajustes del catálogo](#8-ajustes-del-catálogo)
+- [9. Actualizaciones](#9-actualizaciones)
+- [10. Solución de problemas](#10-solución-de-problemas)
 
 ## 1. Instalación
 
@@ -98,13 +99,21 @@ Abre *Configuración › TMDB & IMDb ratings › Link my TMDB account*, escanea 
 - Las descripciones de los títulos que posees provienen de tu servidor Jellyfin, en el *Preferred metadata language* (idioma preferido de los metadatos) de cada biblioteca. Cámbialo en el servidor y actualiza los metadatos de la biblioteca para tenerlas en otro idioma.
 - El descubrimiento usa Francia como región: listas de tendencias, clasificaciones por edades y los estantes franceses.
 
-## 8. Actualizaciones
+## 8. Ajustes del catálogo
+
+*Configuración › Configuración avanzada › Catalog* ajusta lo que proponen las filas de TMDB (estas opciones se muestran en inglés):
+
+- *Oldest titles suggested*: ninguna sugerencia estrenada antes del año elegido (de 1970 a 2010). La búsqueda y las sagas siguen mostrando todos los títulos.
+- *How well known*: *Balanced*, *Discovery: lesser known titles too* (también títulos menos conocidos) o *Big hits only*.
+- *Show « Continue watching »* y *Show « Recently added »* ocultan esas filas en la pantalla de inicio, las páginas Movies y Series y las bibliotecas.
+
+## 9. Actualizaciones
 
 El APK de la página de Releases comprueba en GitHub si hay versiones nuevas al iniciarse y muestra *Update available* cuando la hay. La sección *Acerca de* de *Configuración* también indica si hay una actualización disponible. Puedes desactivar la comprobación automática en *Configuración › Configuración avanzada › Buscar actualizaciones automáticamente*.
 
 Instalar una versión nueva sobre la anterior conserva tu configuración, siempre que ambas estén firmadas con la misma clave. Una compilación que hayas hecho tú mismo (firmada con tu propia clave) no se puede actualizar con el APK de Releases: desinstálala primero, lo que borra la configuración de la aplicación.
 
-## 9. Solución de problemas
+## 10. Solución de problemas
 
 **No hay filas de descubrimiento, o aparece "TMDB not configured: add your key in Settings › TMDB & IMDb ratings"**
 Añade una clave de TMDB ([paso 3](#3-añade-tu-clave-de-tmdb)) y reinicia la aplicación.

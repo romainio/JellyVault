@@ -9,8 +9,9 @@
 - [5. Demander un film ou une série](#5-demander-un-film-ou-une-série)
 - [6. Lier ton compte TMDB (notes et watchlist)](#6-lier-ton-compte-tmdb-notes-et-watchlist)
 - [7. Langue](#7-langue)
-- [8. Mises à jour](#8-mises-à-jour)
-- [9. Dépannage](#9-dépannage)
+- [8. Réglages du catalogue](#8-réglages-du-catalogue)
+- [9. Mises à jour](#9-mises-à-jour)
+- [10. Dépannage](#10-dépannage)
 
 Les captures sont prises avec l'interface en anglais ; les libellés français sont indiqués dans le texte.
 
@@ -100,13 +101,21 @@ Ouvre *Paramètres › TMDB et notes IMDb › Lier mon compte TMDB*, scanne le c
 - Les descriptions des titres que tu possèdes viennent de ton serveur Jellyfin, dans la *Langue de métadonnées préférée* de chaque bibliothèque. Change-la sur le serveur et actualise les métadonnées de la bibliothèque pour les avoir dans une autre langue.
 - La découverte utilise la France comme région : tendances, classifications d'âge et étagères françaises.
 
-## 8. Mises à jour
+## 8. Réglages du catalogue
+
+*Paramètres › Paramètres avancés › Catalogue* règle ce que proposent les rangées TMDB :
+
+- *Titres proposés depuis* : aucune suggestion sortie avant l'année choisie (de 1970 à 2010). La recherche et les sagas montrent toujours tous les titres.
+- *Notoriété des titres* : *Équilibrée*, *Découverte : titres moins connus aussi* ou *Grands succès seulement*.
+- *Afficher « Continuer à regarder »* et *Afficher « Récemment ajouté »* masquent ces rangées sur l'accueil, les pages Films et Séries et les bibliothèques.
+
+## 9. Mises à jour
 
 L'APK de la page Releases vérifie sur GitHub au démarrage s'il existe une nouvelle version et affiche *Update available* le cas échéant. La section *À propos* des *Paramètres* indique aussi si une mise à jour est disponible. Tu peux désactiver la vérification dans *Paramètres › Paramètres avancés › Vérifier automatiquement les mises à jour*.
 
 Installer une nouvelle version par-dessus l'ancienne garde tes réglages, à condition que les deux soient signées avec la même clé. Un build que tu as compilé toi-même (signé avec ta propre clé) ne peut pas être mis à jour par l'APK des Releases : il faut d'abord le désinstaller, ce qui efface les réglages de l'application.
 
-## 9. Dépannage
+## 10. Dépannage
 
 **Pas de rangées découverte, ou « TMDB non configuré : ajoutez votre clé dans Paramètres › TMDB et notes IMDb »**
 Ajoute une clé TMDB ([étape 3](#3-ajouter-ta-clé-tmdb)), puis relance l'application.
