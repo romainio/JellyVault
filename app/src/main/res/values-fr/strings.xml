@@ -887,7 +887,6 @@
     <string name="theme_fantasy_adventure">Aventures fantastiques</string>
     <string name="theme_road_movie">Road movies</string>
     <string name="theme_parody">Parodies</string>
-    <string name="theme_teen_comedy">Comédies ados</string>
     <string name="theme_christmas">Films de Noël</string>
     <string name="theme_conspiracy">Complots</string>
     <string name="theme_kidnapping">Enlèvements</string>
@@ -912,6 +911,17 @@
     <string name="theme_weddings">Mariages</string>
     <string name="theme_revenge">Vengeance</string>
     <string name="theme_french_stand_up">Stand-up français</string>
+    <string name="catalog_genre_superheroes">Super-héros</string>
+    <string name="catalog_genre_true_story">Faits réels</string>
+    <string name="catalog_genre_sports">Sport</string>
+    <string name="theme_adult_comedy">Comédies déjantées</string>
+    <string name="theme_scams">Arnaques et escrocs</string>
+    <string name="theme_twists">Scénarios à twist</string>
+    <string name="theme_cartels">Cartels et narcotrafic</string>
+    <string name="theme_racing">Courses automobiles</string>
+    <string name="theme_geniuses">Génies et scientifiques</string>
+    <string name="theme_special_forces">Forces spéciales</string>
+    <string name="theme_aviation">Pilotes et aviation</string>
     <string name="discover_for_you_row">Recommandé pour toi</string>
     <string name="discover_because_soon">Parce que tu as regardé…</string>
     <string name="discover_because">Parce que tu as regardé %1$s</string>

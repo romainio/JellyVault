@@ -1100,7 +1100,6 @@
     <string name="theme_fantasy_adventure">Fantasy adventures</string>
     <string name="theme_road_movie">Road movies</string>
     <string name="theme_parody">Parodies</string>
-    <string name="theme_teen_comedy">Teen comedies</string>
     <string name="theme_christmas">Christmas films</string>
     <string name="theme_conspiracy">Conspiracies</string>
     <string name="theme_kidnapping">Kidnappings</string>
@@ -1125,6 +1124,17 @@
     <string name="theme_weddings">Weddings</string>
     <string name="theme_revenge">Revenge</string>
     <string name="theme_french_stand_up">French stand-up</string>
+    <string name="catalog_genre_superheroes">Superheroes</string>
+    <string name="catalog_genre_true_story">True stories</string>
+    <string name="catalog_genre_sports">Sports</string>
+    <string name="theme_adult_comedy">Outrageous comedies</string>
+    <string name="theme_scams">Cons and scams</string>
+    <string name="theme_twists">Twist endings</string>
+    <string name="theme_cartels">Cartels and drug trade</string>
+    <string name="theme_racing">Car racing</string>
+    <string name="theme_geniuses">Geniuses and scientists</string>
+    <string name="theme_special_forces">Special forces</string>
+    <string name="theme_aviation">Pilots and planes</string>
     <string name="discover_for_you_row">Recommended for you</string>
     <string name="discover_because_soon">Because you watched…</string>
     <string name="discover_because">Because you watched %1$s</string>

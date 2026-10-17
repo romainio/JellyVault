@@ -107,4 +107,26 @@ class GenreThemesTest {
         assertEquals("first_air_date.asc", tv["sort_by"])
         assertFalse(tv.containsKey("without_genres") || tv.containsKey("with_crew") || tv.containsKey("with_original_language"))
     }
+
+    @Test
+    fun comedy_opens_with_comedies_made_for_adults_not_teen_comedies() {
+        val first = queries(CatalogGenre.COMEDY, TmdbMediaType.MOVIE).first()
+        assertEquals(adultComedyQuery(), first)
+        val params = first.params(1)
+        assertEquals("US", params["certification_country"])
+        assertEquals("R", params["certification"])
+        assertEquals("vote_count.desc", params["sort_by"])
+        // Ted is a comedy and a fantasy film: fantasy stays allowed
+        assertFalse(14 in first.withoutGenreIds)
+        assertTrue(first.withoutGenreIds.containsAll(listOf(18, 80, 28, 10749)))
+        assertTrue(queries(CatalogGenre.COMEDY, TmdbMediaType.MOVIE).none { 6270 in it.keywordIds })
+    }
+
+    @Test
+    fun taste_themes_reach_their_genres() {
+        assertTrue(queries(CatalogGenre.THRILLER, TmdbMediaType.MOVIE).first().keywordIds == TasteKeywords.TWISTS)
+        assertTrue(queries(CatalogGenre.CRIME, TmdbMediaType.MOVIE).any { it.keywordIds == TasteKeywords.CARTELS })
+        assertTrue(queries(CatalogGenre.ACTION, TmdbMediaType.MOVIE).any { it.keywordIds == TasteKeywords.SPECIAL_FORCES })
+        assertTrue(queries(CatalogGenre.DRAMA, TmdbMediaType.MOVIE).any { it.keywordIds == TasteKeywords.GENIUSES })
+    }
 }

@@ -7,6 +7,8 @@ import androidx.annotation.StringRes
 import tv.jellyvault.app.R
 import tv.jellyvault.app.catalog.tmdb.TmdbDiscoverQuery
 import tv.jellyvault.app.catalog.tmdb.TmdbMediaType
+import tv.jellyvault.app.catalog.tmdb.TmdbSort
+import java.time.LocalDate
 
 /**
  * A themed row ("Romantic comedies", "Based on a true story"…): a TMDB discover query with its title
@@ -35,7 +37,6 @@ private object Keyword {
     const val SURVIVAL = 10349
     const val ROAD_MOVIE = 167043
     const val PARODY = 9755
-    const val HIGH_SCHOOL = 6270
     const val CHRISTMAS = 207317
     const val CONSPIRACY = 10410
     const val KIDNAPPING = 1930
@@ -60,6 +61,44 @@ private object Keyword {
     const val WEDDING = 13027
     const val REVENGE = 9748
 }
+
+/**
+ * Keyword groups behind the styles the user's IMDb ratings point to (twist endings, scams, cartels...), shared by the
+ * genre pages and the home styles
+ */
+internal object TasteKeywords {
+    val TWISTS = listOf(326438, 275311, 362567, 174089, 157171, 11469)
+    val SCAMS = listOf(10453, 11454, 4373, 5636)
+    val CARTELS = listOf(10175, 2149)
+    val RACING = listOf(830, 10039)
+    val GENIUSES = listOf(6257, 2303, 14760)
+    val AVIATION = listOf(2533, 10168)
+    val SPECIAL_FORCES = listOf(15218, 1589, 11219, 379459)
+}
+
+/** TMDB keywords "stand-up comedy" and "stand-up special" */
+private val STAND_UP = listOf(9716, 376694)
+
+/**
+ * The Hangover, Ted, Superbad: comedies made for adults (rated R), nothing but comedy, most seen first
+ */
+internal fun adultComedyQuery() =
+    TmdbDiscoverQuery(
+        TmdbMediaType.MOVIE,
+        genreId = COMEDY,
+        withoutGenreIds = listOf(ANIMATION, FAMILY, DRAMA, CRIME, ACTION, HORROR, ROMANCE, THRILLER, MYSTERY),
+        withoutKeywordIds = STAND_UP,
+        usCertification = "R",
+        releasedAfter = LocalDate.of(2000, 1, 1),
+        minVotes = ADULT_COMEDY_MIN_VOTES,
+        sort = TmdbSort.VOTES,
+        mainstreamOnly = true,
+    )
+
+private const val ADULT_COMEDY_MIN_VOTES = 1500
+private const val HORROR = 27
+private const val THRILLER = 53
+private const val MYSTERY = 9648
 
 private const val ROMANCE = 10749
 private const val COMEDY = 35
@@ -140,6 +179,15 @@ fun genreThemes(
 
     fun country(title: Int) =
         theme(title, type, id, originCountry = "FR", withoutGenreIds = without, withoutKeywordIds = genre.withoutKeywordIds)
+
+    fun kws(
+        title: Int,
+        keywords: List<Int>,
+    ) = kw(title, *keywords.toIntArray())
+    val twists = kws(R.string.theme_twists, TasteKeywords.TWISTS)
+    val scams = kws(R.string.theme_scams, TasteKeywords.SCAMS)
+    val cartels = kws(R.string.theme_cartels, TasteKeywords.CARTELS)
+    val specialForces = kws(R.string.theme_special_forces, TasteKeywords.SPECIAL_FORCES)
     val trueStory = kw(R.string.theme_true_story, Keyword.TRUE_STORY)
     val serialKiller = kw(R.string.theme_serial_killer, Keyword.SERIAL_KILLER)
     val biopic = kw(R.string.theme_biopic, Keyword.BIOGRAPHY)
@@ -151,9 +199,12 @@ fun genreThemes(
                     kw(R.string.theme_heist, Keyword.HEIST),
                     kw(R.string.theme_spy, Keyword.SPY),
                     kw(R.string.theme_superhero, Keyword.SUPERHERO),
+                    specialForces,
+                    kws(R.string.theme_racing, TasteKeywords.RACING),
                     kw(R.string.theme_martial_arts, Keyword.MARTIAL_ARTS),
                     with(R.string.theme_action_comedy, COMEDY),
                     kw(R.string.theme_revenge, Keyword.REVENGE),
+                    kws(R.string.theme_aviation, TasteKeywords.AVIATION),
                 )
             } else {
                 listOf(kw(R.string.theme_superhero, Keyword.SUPERHERO), kw(R.string.theme_spy, Keyword.SPY))
@@ -172,25 +223,28 @@ fun genreThemes(
         CatalogGenre.COMEDY -> {
             if (movie) {
                 listOf(
+                    ThemeRow(R.string.theme_adult_comedy, adultComedyQuery()),
                     country(R.string.theme_french_comedy),
-                    with(R.string.theme_romcom, ROMANCE),
                     with(R.string.theme_action_comedy, ACTION),
                     kw(R.string.theme_buddy, Keyword.BUDDY_COMEDY),
+                    scams,
+                    with(R.string.theme_romcom, ROMANCE),
                     kw(R.string.theme_dark_comedy, Keyword.SATIRE, Keyword.BLACK_COMEDY),
                     kw(R.string.theme_parody, Keyword.PARODY),
-                    kw(R.string.theme_teen_comedy, Keyword.HIGH_SCHOOL),
                     with(R.string.theme_family_comedy, FAMILY),
                 )
             } else {
-                listOf(country(R.string.theme_french_comedy), kw(R.string.theme_teen_comedy, Keyword.HIGH_SCHOOL))
+                listOf(country(R.string.theme_french_comedy))
             }
         }
 
         CatalogGenre.THRILLER -> {
             if (movie) {
                 listOf(
+                    twists,
                     kw(R.string.theme_psychological, Keyword.PSYCHOLOGICAL_THRILLER),
                     serialKiller,
+                    cartels,
                     with(R.string.theme_crime_thriller, CRIME),
                     kw(R.string.theme_conspiracy, Keyword.CONSPIRACY),
                     kw(R.string.theme_kidnapping, Keyword.KIDNAPPING),
@@ -202,12 +256,13 @@ fun genreThemes(
         }
 
         CatalogGenre.MYSTERY -> {
-            listOf(detective, serialKiller, kw(R.string.theme_conspiracy, Keyword.CONSPIRACY))
+            listOf(twists, detective, serialKiller, kw(R.string.theme_conspiracy, Keyword.CONSPIRACY))
         }
 
         CatalogGenre.SCIENCE_FICTION -> {
             listOf(
                 kw(R.string.theme_space, Keyword.SPACE),
+                twists,
                 kw(R.string.theme_time_travel, Keyword.TIME_TRAVEL),
                 kw(R.string.theme_dystopia, Keyword.DYSTOPIA),
                 kw(R.string.theme_aliens, Keyword.ALIEN),
@@ -232,6 +287,8 @@ fun genreThemes(
                 listOf(
                     trueStory,
                     biopic,
+                    kws(R.string.theme_geniuses, TasteKeywords.GENIUSES),
+                    scams,
                     kw(R.string.theme_family_drama, Keyword.FAMILY_RELATIONSHIPS),
                     with(R.string.theme_romantic_drama, ROMANCE),
                     kw(R.string.theme_coming_of_age, Keyword.COMING_OF_AGE),
@@ -278,6 +335,8 @@ fun genreThemes(
             if (movie) {
                 listOf(
                     kw(R.string.theme_heist, Keyword.HEIST),
+                    scams,
+                    cartels,
                     kw(R.string.theme_mafia, Keyword.MAFIA),
                     serialKiller,
                     detective,
@@ -306,7 +365,7 @@ fun genreThemes(
         }
 
         CatalogGenre.WAR -> {
-            listOf(trueStory, kw(R.string.theme_ww2, Keyword.WORLD_WAR_II))
+            listOf(trueStory, kw(R.string.theme_ww2, Keyword.WORLD_WAR_II), specialForces)
         }
 
         CatalogGenre.MUSIC -> {

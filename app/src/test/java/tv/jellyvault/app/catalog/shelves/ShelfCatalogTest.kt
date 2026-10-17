@@ -31,4 +31,16 @@ class ShelfCatalogTest {
         assertEquals(listOf(10751), query("superheroes").withoutGenreIds)
         listOf("animation", "tv_animation", "blockbusters").forEach { assertTrue(it, query(it).withoutGenreIds.isEmpty()) }
     }
+
+    @Test
+    fun taste_styles_exist() {
+        assertEquals(
+            tv.jellyvault.app.catalog
+                .adultComedyQuery(),
+            query("adult_comedies"),
+        )
+        listOf("scams", "twists", "cartels", "racing", "special_forces", "geniuses").forEach {
+            assertTrue(it, query(it).keywordIds.isNotEmpty() && 16 in query(it).withoutGenreIds)
+        }
+    }
 }

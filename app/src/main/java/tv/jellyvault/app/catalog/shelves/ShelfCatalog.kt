@@ -2,6 +2,8 @@ package tv.jellyvault.app.catalog.shelves
 
 import androidx.annotation.StringRes
 import tv.jellyvault.app.R
+import tv.jellyvault.app.catalog.TasteKeywords
+import tv.jellyvault.app.catalog.adultComedyQuery
 import tv.jellyvault.app.catalog.tmdb.TmdbDiscoverQuery
 import tv.jellyvault.app.catalog.tmdb.TmdbMediaType
 import tv.jellyvault.app.catalog.tmdb.TmdbSort
@@ -180,6 +182,26 @@ object ShelfCatalog {
                 movie(keywords = listOf(K.PSYCHOLOGICAL_THRILLER), without = ADULT)
             },
             Shelf("comedies", R.string.shelf_comedies, M, ShelfGroup.COMEDY, listOf(G.COMEDY)) { movie(G.COMEDY, without = NO_ANIMATION) },
+            // Styles the user's IMDb ratings point to (The Hangover, The Big Short, Inception, Sicario, Le Mans 66...)
+            Shelf("adult_comedies", R.string.theme_adult_comedy, M, ShelfGroup.COMEDY, listOf(G.COMEDY)) { adultComedyQuery() },
+            Shelf("scams", R.string.theme_scams, M, ShelfGroup.CRIME, listOf(G.CRIME, G.DRAMA, G.COMEDY)) {
+                movie(keywords = TasteKeywords.SCAMS, without = ADULT)
+            },
+            Shelf("twists", R.string.theme_twists, M, ShelfGroup.THRILLER, listOf(G.THRILLER, G.MYSTERY, G.SCIENCE_FICTION)) {
+                movie(anyGenres = listOf(G.THRILLER, G.MYSTERY, G.SCIENCE_FICTION), keywords = TasteKeywords.TWISTS, without = ADULT)
+            },
+            Shelf("cartels", R.string.theme_cartels, M, ShelfGroup.CRIME, listOf(G.CRIME, G.ACTION, G.THRILLER)) {
+                movie(keywords = TasteKeywords.CARTELS, without = ADULT)
+            },
+            Shelf("racing", R.string.theme_racing, M, ShelfGroup.ACTION, listOf(G.ACTION, G.DRAMA)) {
+                movie(keywords = TasteKeywords.RACING, without = ADULT)
+            },
+            Shelf("special_forces", R.string.theme_special_forces, M, ShelfGroup.ACTION, listOf(G.ACTION, G.WAR)) {
+                movie(keywords = TasteKeywords.SPECIAL_FORCES, without = ADULT)
+            },
+            Shelf("geniuses", R.string.theme_geniuses, M, ShelfGroup.TRUE_STORY, listOf(G.DRAMA, G.HISTORY)) {
+                movie(G.DRAMA, keywords = TasteKeywords.GENIUSES, without = ADULT)
+            },
             Shelf("recent_gems", R.string.shelf_recent_gems, M, ShelfGroup.PRESTIGE, emptyList()) {
                 movie(minRating = 7.0, after = it.minusYears(2))
             },

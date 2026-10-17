@@ -168,4 +168,14 @@ class BrowseTargetTest {
         assertTrue(rows.all { it.genreId == 16 && it.companyIds.containsAll(listOf(6125, 3, 10342)) })
         assertTrue(browseRows(BrowseTarget.Genre(CatalogGenre.CARTOONS, TmdbMediaType.TV), today).isEmpty())
     }
+
+    @Test
+    fun keyword_genres_browse_like_genres() {
+        val superheroes = queries(BrowseTarget.Genre(CatalogGenre.SUPERHEROES, TmdbMediaType.MOVIE))
+        assertTrue(superheroes.all { it.genreId == 28 && it.keywordIds == listOf(9715) })
+        // New, popular, top rated, classics: the regular layout, not stand-up's
+        assertEquals(4, superheroes.size)
+        assertTrue(queries(BrowseTarget.Genre(CatalogGenre.TRUE_STORY, TmdbMediaType.TV)).all { it.keywordIds == listOf(9672) })
+        assertTrue(browseRows(BrowseTarget.Genre(CatalogGenre.SPORTS, TmdbMediaType.TV), today).isEmpty())
+    }
 }

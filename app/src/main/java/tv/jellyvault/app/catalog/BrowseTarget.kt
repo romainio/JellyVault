@@ -181,7 +181,7 @@ private fun TmdbDiscoverQuery.popular(mainstream: Boolean = false) =
 fun gridQuery(target: BrowseTarget): TmdbDiscoverQuery? {
     val base = baseQuery(target) ?: return null
     // Stand-up shows collect few votes
-    if (target is BrowseTarget.Genre && target.genre.keywordIds.isNotEmpty()) return base.copy(minVotes = KEYWORD_GENRE_GRID_MIN_VOTES)
+    if (target is BrowseTarget.Genre && target.genre.fewVotes) return base.copy(minVotes = KEYWORD_GENRE_GRID_MIN_VOTES)
     return base.popular(mainstream = target is BrowseTarget.Genre)
 }
 
@@ -249,7 +249,7 @@ private fun genreRows(
     base: TmdbDiscoverQuery,
     today: LocalDate,
 ): List<BrowseRowSpec> {
-    if (target.genre.keywordIds.isNotEmpty()) return keywordGenreRows(base, today)
+    if (target.genre.fewVotes) return fewVotesGenreRows(base, today)
     val movie = target.mediaType == TmdbMediaType.MOVIE
     val fresh = base.copy(releasedAfter = today.minusYears(1), mainstreamOnly = true)
     val popular = base.popular(mainstream = true)
@@ -278,9 +278,9 @@ private fun genreRows(
 }
 
 /**
- * A genre made of keywords (stand-up): shows collect few votes, French ones fewer still
+ * Stand-up: shows collect few votes, French ones fewer still
  */
-private fun keywordGenreRows(
+private fun fewVotesGenreRows(
     base: TmdbDiscoverQuery,
     today: LocalDate,
 ): List<BrowseRowSpec> {

@@ -75,7 +75,7 @@ class GenreImagesViewModel
             val votes =
                 when {
                     // Stand-up shows collect few votes
-                    genre.keywordIds.isNotEmpty() -> STAND_UP_PICTURE_MIN_VOTES
+                    genre.fewVotes -> STAND_UP_PICTURE_MIN_VOTES
 
                     mediaType == TmdbMediaType.MOVIE -> PICTURE_MIN_VOTES
 

@@ -63,7 +63,7 @@ fun TmdbGenreCards(
         remember(mediaType) {
             CatalogGenre.entries
                 .filter { mediaType == TmdbMediaType.MOVIE || it.tvGenreId != null }
-                .let { genres -> if (mediaType == TmdbMediaType.MOVIE) genres else genres.distinctBy { it.tvGenreId } }
+                .let { genres -> if (mediaType == TmdbMediaType.MOVIE) genres else genres.distinctBy { it.tvGenreId to it.keywordIds } }
                 .map { TmdbGenreItem(it, context.getString(it.titleRes)) }
         }
     LaunchedEffect(mediaType) { imagesViewModel.init(mediaType, genres.map { it.genre }) }

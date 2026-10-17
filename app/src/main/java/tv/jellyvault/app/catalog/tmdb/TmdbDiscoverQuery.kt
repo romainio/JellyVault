@@ -56,6 +56,8 @@ data class TmdbDiscoverQuery(
     val originalLanguages: List<String> = emptyList(),
     /** TMDB person in the crew, e.g. the director (movies only) */
     val crewId: Int? = null,
+    /** US rating, e.g. "R" for comedies made for adults (movies only) */
+    val usCertification: String? = null,
 ) {
     fun params(page: Int): Map<String, String> =
         buildMap {
@@ -67,6 +69,10 @@ data class TmdbDiscoverQuery(
             withoutKeywordIds.takeIf { it.isNotEmpty() }?.let { put("without_keywords", it.joinToString(",")) }
             originalLanguages.takeIf { it.isNotEmpty() }?.let { put("with_original_language", it.joinToString("|")) }
             crewId?.let { put("with_crew", it.toString()) }
+            usCertification?.let {
+                put("certification_country", "US")
+                put("certification", it)
+            }
             originCountry?.let { put("with_origin_country", it) }
             (companyId?.toString() ?: companyIds.takeIf { it.isNotEmpty() }?.joinToString("|"))?.let { put("with_companies", it) }
             (networkId?.toString() ?: networkIds.takeIf { it.isNotEmpty() }?.joinToString("|"))?.let { put("with_networks", it) }
