@@ -68,8 +68,8 @@ configure<ApplicationExtension> {
         minSdk = libs.versions.minSdk.getInt()
         targetSdk = libs.versions.targetSdk.getInt()
         // Explicit: the public repository has no tag history (the TV's previous build was code 60)
-        versionCode = 102
-        versionName = "1.2.0"
+        versionCode = 103
+        versionName = "1.2.1"
         testInstrumentationRunner = "tv.jellyvault.app.test.JellyVaultTestRunner"
 
         buildConfigField("long", "BUILD_TIME", System.currentTimeMillis().toString())
