@@ -152,7 +152,19 @@ class CatalogRepository
             return toCards(if (type == TmdbListType.POPULAR) items.mainstream() else items)
         }
 
-        suspend fun searchCards(query: String): List<MediaCard> = toCards(tmdb.search(query).items)
+        /**
+         * TMDB titles matching [query]. TMDB forgives no typo ("games of thrones" finds nothing): a query without results is
+         * searched again with its [searchVariants]
+         */
+        suspend fun searchCards(query: String): List<MediaCard> {
+            val items = tmdb.search(query).items
+            if (items.isNotEmpty()) return toCards(items)
+            for (variant in searchVariants(query)) {
+                val found = tmdb.search(variant).items
+                if (found.isNotEmpty()) return toCards(found)
+            }
+            return emptyList()
+        }
 
         suspend fun queryRow(query: TmdbDiscoverQuery): List<MediaCard> = toCards(tmdb.discover(query).items.forQuery(query))
 
@@ -328,6 +340,31 @@ class CatalogRepository
             }
         }
     }
+
+private val WHITESPACE = Regex("""\s+""")
+
+/** Shorter words lose no "s": "bus", "gas" */
+private const val PLURAL_MIN_LENGTH = 4
+
+/**
+ * Looser forms of a search that found nothing, to try in order: every word without its plural "s" ("games of thrones" →
+ * "game of throne", TMDB matches the start of words), then the longest word alone ("thrones")
+ */
+fun searchVariants(query: String): List<String> {
+    val words =
+        query
+            .trim()
+            .lowercase()
+            .split(WHITESPACE)
+            .filter { it.isNotEmpty() }
+    if (words.isEmpty()) return emptyList()
+    val singular =
+        words.joinToString(" ") { word ->
+            if (word.length >= PLURAL_MIN_LENGTH && word.endsWith('s') && !word.endsWith("ss")) word.dropLast(1) else word
+        }
+    val longest = words.maxBy { it.length }.takeIf { words.size > 1 && it.length >= PLURAL_MIN_LENGTH }
+    return listOfNotNull(singular, longest).distinct().filter { it != words.joinToString(" ") }
+}
 
 private val SAGA_SUFFIX =
     Regex(
