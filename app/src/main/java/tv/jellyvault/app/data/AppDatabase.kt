@@ -30,6 +30,7 @@ import tv.jellyvault.app.data.model.NavDrawerPinnedItem
 import tv.jellyvault.app.data.model.PlaybackEffect
 import tv.jellyvault.app.data.model.PlaybackLanguageChoice
 import tv.jellyvault.app.data.model.RememberedTab
+import tv.jellyvault.app.data.model.SeriesTrackChoice
 import tv.jellyvault.app.ui.components.ViewOptions
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
@@ -46,8 +47,9 @@ import java.util.UUID
         PlaybackLanguageChoice::class,
         ItemTrackModification::class,
         RememberedTab::class,
+        SeriesTrackChoice::class,
     ],
-    version = 36,
+    version = 37,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(3, 4),
@@ -67,6 +69,7 @@ import java.util.UUID
         AutoMigration(33, 34),
         AutoMigration(34, 35),
         AutoMigration(35, 36, spec = AppDatabase.DropSeerrTablesSpec::class),
+        AutoMigration(36, 37),
     ],
 )
 @TypeConverters(Converters::class)

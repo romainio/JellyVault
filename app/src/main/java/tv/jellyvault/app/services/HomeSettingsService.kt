@@ -240,7 +240,7 @@ class HomeSettingsService
             // User local then server/remote otherwise create a default
             val settings =
                 try {
-                    val local = loadFromLocal(userId)
+                    val local = usable(loadFromLocal(userId))
                     Timber.v("Found local? %s", local != null)
                     local
                 } catch (ex: Exception) {
@@ -248,7 +248,7 @@ class HomeSettingsService
                     // TODO show toast?
                     null
                 } ?: try {
-                    val remote = loadFromServer(userId)
+                    val remote = usable(loadFromServer(userId))
                     Timber.v("Found remote? %s", remote != null)
                     remote
                 } catch (ex: Exception) {
@@ -1444,3 +1444,10 @@ fun viewOptionsForCollectionType(collectionType: CollectionType?): HomeRowViewOp
             HomeRowViewOptions()
         }
     }
+
+/**
+ * Saved settings without any row are treated as missing, so the default home is built again:
+ * an empty home is never wanted, and the settings page could save one when closed before it
+ * had loaded the rows (fixed since, but a TV may still hold such a file).
+ */
+internal fun usable(settings: HomePageSettings?): HomePageSettings? = settings?.takeIf { it.rows.isNotEmpty() }

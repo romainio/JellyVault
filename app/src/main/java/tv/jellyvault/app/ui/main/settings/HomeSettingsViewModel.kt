@@ -94,6 +94,10 @@ class HomeSettingsViewModel
         private var originalLocalSettings: HomePageSettings? = null
         private var originalRemoteSettings: HomePageSettings? = null
 
+        /** True once the rows are loaded: closing the page before must not save an empty home */
+        @Volatile
+        private var loaded = false
+
         init {
             addCloseable { saveToLocal() }
             viewModelScope.launchIO {
@@ -111,6 +115,7 @@ class HomeSettingsViewModel
                         rows = currentSettings.rows,
                     )
                 }
+                loaded = true
                 fetchRowData()
             }
         }
@@ -593,6 +598,10 @@ class HomeSettingsViewModel
         }
 
         fun saveToLocal() {
+            if (!loaded) {
+                Timber.d("Home settings not loaded yet: nothing to save")
+                return
+            }
             // This uses injected ioScope so that it will still run when the page is closing
             ioScope.launchIO {
                 serverRepository.currentUser?.let { user ->
